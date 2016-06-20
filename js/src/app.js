@@ -1,6 +1,7 @@
 import {h} from 'virtual-dom';
 // import {Observable} from 'rxjs-es/Rx';
 import {Observable, Subject} from 'rx';
+import leftPad from 'left-pad';
 
 const button = (label, klass) => {
     const clicks$ = new Subject();
@@ -40,13 +41,13 @@ const timerModel = (duration, {running = false, id = nextId()} = {}) => {
 const model = (intents) => {
     const timers$ = intents.timerUpdates$.scan(
         (timers, update) => {
-            console.log(timers);
+            console.log("SCAN", timers);
             return timers.map(timer => {
                 return timer.id == update.id ? update.updated : timer
             });
         },
         [timerModel(300)]
-    ).startWith([timerModel(300)]);
+    ).startWith([timerModel(300)]).do(x => console.log("X", x));
 
     return {
         timers$
@@ -54,9 +55,9 @@ const model = (intents) => {
 };
 
 const timerComponent = (timerModel) => {
-    const minutes = Math.floor(timerModel.duration / 60);
-    const seconds = timerModel.duration % 60;
-    // TODO: zero-padding
+    const minutes = leftPad(Math.floor(timerModel.duration / 60), 2, 0);
+    const seconds = leftPad(timerModel.duration % 60, 2, 0);
+
     const startButton = button('Start', 'timer__start');
     const pauseButton = button('Pause', 'timer__pause');
     const editButton = button('Edit', 'timer__edit');
@@ -94,10 +95,13 @@ const timerComponent = (timerModel) => {
 };
 
 const mainComponent = (model) => {
-    const timerList$ = model.timers$.map((timers) => timers.map((timer) => timerComponent(timer))).share();
+    const timerList$ = model.timers$.
+          map((timers) => timers.map((timer) => timerComponent(timer))).
+          shareReplay(1);
     // const timerListTree$ = timerList$.flatMap(timers => h$('div', {class: 'timer-list'}, timers.map(t => t.tree$)));
     const timerListTree$ = timerList$.flatMap(timers => h$('div', timers.map(t => t.tree$)));
-    const timerUpdates$ = timerList$.map(timers => {
+    const timerUpdates$ = timerList$.flatMap(timers => {
+        console.log(timers);
         return Observable.merge(timers.map(t => {
             return Observable.merge(
                 t.events.start$.map(() => ({id: t.id, updated: t.start()})),
@@ -105,10 +109,10 @@ const mainComponent = (model) => {
             );
         }));
     });
-    const tree$ = model.timers$.flatMap((timers) => h$('main', ([
+    const tree$ = h$('main', [
         timerListTree$,
         button('New timer', 'add-timer').tree
-    ])));
+    ]);
     return {
         tree$,
         events$: {
@@ -159,7 +163,6 @@ theView.tree$.
     map(([last, current]) => diff(last, current)).
     reduce((out, patches) => patch(out, patches), out).
     subscribeOnError(err => console.error(err));
-
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
