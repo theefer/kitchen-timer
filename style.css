@@ -1,0 +1,94 @@
+@keyframes flash-animation {
+    to {
+        visibility: hidden;
+    }
+}
+
+.unstyled-button,
+.icon-button {
+    font: inherit;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background-color: transparent;
+    outline: none;
+    /* TODO: a11y? */
+}
+
+.icon-button {
+    --icon-size: 1;
+}
+.icon-button .material-icons {
+    font-size: calc(var(--icon-size) * 24px);
+}
+
+.icon-button-labelled {
+    display: flex;
+    align-items: center;
+}
+
+.main {
+    font-family: Roboto, sans-serif;
+
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.timer {
+    margin-top: 1em;
+    display: flex;
+}
+.timer-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+}
+
+.timer--finished .countdown {
+    animation: flash-animation 1s steps(5, start) infinite;
+}
+
+.editor {
+    display: flex;
+}
+
+.editor__input {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    width: 1.2em;
+}
+
+.editor,
+.editor__input,
+.countdown {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 5rem;
+}
+
+.timer__edit-done,
+.timer__edit-cancel,
+.timer__start,
+.timer__pause {
+    --icon-size: 2;
+}
+
+.timer__edit-done,
+.timer__edit-cancel {
+    margin-left: 10px;
+}
+
+.timer__start,
+.timer__pause {
+    margin: 0 20px;
+}
+
+.add-timer {
+    margin: 1em 0;
+    font-size: 2em;
+    --icon-size: 2;
+}
+/* .add-timer .material-icons { */
+/*     font-size: 48px; /\* 2x *\/ */
+/* } */
