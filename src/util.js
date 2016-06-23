@@ -2,23 +2,30 @@ import virtualize from 'vdom-virtualize';
 import {h, diff, patch} from 'virtual-dom';
 import {Observable} from 'rx';
 
+function isObject(obj) {
+    return (typeof obj === 'object') && (obj !== null);
+}
+
 export function sequenceCombine$(observables$) {
   // Work around odd behaviour of combineLatest with empty Array
   // (never yields a value)
   if (observables$.length === 0) {
     return Observable.return([]);
   } else {
-      const obs$ = observables$.map(obs => typeof obs.subscribe == 'function' ? obs : Observable.return(obs));
+      const obs$ = observables$.map(obs => {
+          return (isObject(obs) && (typeof obs.subscribe === 'function')) ?
+              obs : Observable.return(obs);
+      });
     return Observable.combineLatest(obs$, (...all) => all);
   }
 }
 
 export function h$(tagName, attributes, children) {
-  if (! children) {
-    children = attributes;
-  }
-  return sequenceCombine$(children).
-    map(views => h(tagName, attributes, [...views]));
+    if (! children) {
+        children = attributes;
+    }
+    return sequenceCombine$(children).
+        map(views => h(tagName, attributes, [...views]));
 }
 
 export function renderTo$(tree$, node) {
