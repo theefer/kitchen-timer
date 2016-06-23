@@ -191,7 +191,7 @@ const timerComponent = (timerModel, canRemove) => {
     ]);
     const editableCountdown = button(countdown, {className: 'unstyled-button timer__edit'});
     // Note: can't use type=number as that doesn't allow for leading 0's
-    // TODO: special handling to never excede the field, overwrite instead
+    // FIXME: special handling to never excede the field, overwrite instead
     const minutesInput = input('text', {
         className: 'editor__input editor__minutes',
         value: minutesStr,
@@ -225,7 +225,6 @@ const timerComponent = (timerModel, canRemove) => {
     const tree$ = Observable.of(h('div', {className: timerClasses}, timerContent));
     const start$ = startButton.events.clicks$.map({});
     const pause$ = pauseButton.events.clicks$.map({});
-    // const edit$ = editButton.events.clicks$.map({});
     const edit$ = editableCountdown.events.clicks$.map({});
     // TODO: need validation?
     const minutesValue$ = minutesInput.events.value$.
@@ -304,7 +303,7 @@ const mainComponent = (model) => {
     const addTimer$ = newTimerButton.events.clicks$;
     const voiceButton = materialLabelledIconButton('keyboard_voice', 'Talk', {className: 'start-voice'});
     const listenVoice$ = voiceButton.events.clicks$.map({});
-    // TODO: visual feedback (or even full mode) when listening
+    // FIXME: visual feedback (or even full mode) when listening
     // TODO: "always-on" switch (after listening)
     const voiceTree = h('div', {className: 'voice'}, [
         voiceButton.tree
@@ -357,7 +356,7 @@ Object.keys(theView.events$).forEach(name => {
 const out = document.querySelector('main');
 const rendering$ = renderTo$(theView.tree$, out);
 
-// TODO: also trigger sound (configurable)
+// FIXME: also trigger sound (configurable)
 const vibrations$ = theView.
     vibrations$.
     do(vibrate);
