@@ -10,6 +10,8 @@ import {vibrate} from './vibration';
 
 const toDuration = (min, sec) => min * 60 + sec;
 
+const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
 const button = (label, attrs = {}) => {
     const clicks$ = new Subject();
     const tree = h('button', Object.assign({}, attrs, {
@@ -54,35 +56,39 @@ const input = (type, attrs) => {
     };
 };
 
-// TODO: name
-const timerModel = (duration, {running, editing, remaining} = {running: false, editing: false, remaining: duration}) => {
+const timerModel = (duration, params = {}) => {
+    const name = params.name || '';
+    const remaining = params.remaining || duration;
+    const running = params.running || false;
+    const editing = params.editing || false;
     return {
         duration,
+        name,
         remaining,
+        running,
+        editing, // TODO: or separate state, only one at a time?
         get remainingMinutes() { return Math.floor(remaining / 60); },
         get remainingSeconds() { return remaining % 60; },
         get pristine() { return duration == remaining; },
         get finished() { return remaining == 0; },
-        running,
-        editing, // TODO: or separate state, only one at a time?
         start() {
             // TODO: how to call finished() and reset()?
             if (remaining > 0) {
-                return timerModel(duration, {running: true, editing, remaining});
+                return timerModel(duration, {name, running: true, editing, remaining});
             } else {
                 // If finished, reset before restarting
-                return timerModel(duration, {running: true, editing, remaining: duration});
+                return timerModel(duration, {name, running: true, editing, remaining: duration});
             }
         },
-        pause() { return timerModel(duration, {running: false, editing, remaining}); },
-        reset() { return timerModel(duration, {running: false, editing, remaining: duration}); },
-        edit() { return timerModel(duration, {running: false, editing: true, remaining}); },
-        editDone(newDuration) { return timerModel(newDuration, {running, editing: false, remaining: newDuration}); },
+        pause() { return timerModel(duration, {name, running: false, editing, remaining}); },
+        reset() { return timerModel(duration, {name, running: false, editing, remaining: duration}); },
+        edit() { return timerModel(duration, {name, running: false, editing: true, remaining}); },
+        editDone(newDuration) { return timerModel(newDuration, {name, running, editing: false, remaining: newDuration}); },
         decrement() {
             if (remaining > 0) {
-                return timerModel(duration, {running, remaining: remaining - 1});
+                return timerModel(duration, {name, running, remaining: remaining - 1});
             } else {
-                return timerModel(duration, {running: false, remaining: 0});
+                return timerModel(duration, {name, running: false, remaining: 0});
             }
         },
     };
@@ -95,6 +101,20 @@ const updateTimer = (timer, type) => {
     default:
         throw new Exception(`unexpected update type: ${type}`);
     }
+};
+
+const parseNumber = (str) => {
+    return str && {
+        one:   1,
+        two:   2,
+        three: 3,
+        four:  4,
+        five:  5,
+        six:   6,
+        seven: 7,
+        eight: 8,
+        nine:  9
+    }[str] || parseInt(str, 10);
 };
 
 const model = (intents) => {
@@ -130,29 +150,44 @@ const model = (intents) => {
     const remove$ = intents.removeTimer$.map((update) => timers => {
         return timers.filter((timer, index) => index !== update.index);
     });
-    // TODO: "and a half"
     // TODO: saner grammer?
-    const parser = /^(?:(\d+|one) minutes?(?: and ?)?)?(?:(\d+|one) seconds?)?$/;
-    const voiceAdd$ = intents.listenVoice$.
-        flatMap(() => captureSpeech$()).
+    const parser = /^(?:(\d+|one|two|three|four|five|six|seven|eight|nine)( and a half)? minutes?)?(?:(?: and ?)?(\d+|one) seconds?|( and a half))?(?: (?:for )?(?:the )?(.+))?$/;
+    const voiceCapture$ = intents.listenVoice$.
+        // Capture speech until done or finish voice triggered
+        // Need .first() to only wait for a single signal
+        flatMap(() => captureSpeech$().amb(intents.finishVoice$.map('')).first()).
+        // FIXME: handle error?
+        // catch(() => '').
         map(transcript => {
-            console.log(transcript);
+            console.log('Heard:', transcript);
             const match = transcript.match(parser);
             let result;
             if (match) {
-                const [_, minutesStr, secondsStr] = match;
+                const [_, minutesStr, half1, secondsStr, half2, name] = match;
                 // TODO: match and map more text numbers (one, five, etc)
-                const minutes = minutesStr && parseInt(minutesStr, 10) || 0;
-                const seconds = secondsStr && parseInt(secondsStr, 10) || 0;
-                result = toDuration(minutes, seconds);
+                const minutes = parseNumber(minutesStr) || 0;
+                const seconds = parseNumber(secondsStr) ||
+                      ((half1 || half2) && 30) || 0;
+                result = {
+                    name: name && capitalize(name) || '',
+                    duration: toDuration(minutes, seconds)
+                };
             }
             return result;
-        }).
+        }).share();
+    const voiceAdd$ = voiceCapture$.
         // TODO: error if failed to understand (!= 0)
-        filter(result => !! result).
-        map(duration => timers => {
-            return timers.concat(timerModel(duration));
+        filter(result => result && result.duration > 0).
+        map(({name, duration}) => timers => {
+            return timers.concat(timerModel(duration, {name}));
         });
+    const voiceError$ = voiceCapture$.
+        // TODO: error if failed to understand (!= 0)
+        filter(result => ! (result && result.duration > 0))
+    const singleListening$ = Observable.merge(
+        intents.listenVoice$.map(true),
+        voiceCapture$.map(false)
+    ).startWith(false);
     const init = timers => timers;
     const timers$ = Observable.
           merge(update$, add$, reset$, remove$, edit$, editDone$, applyTime$, voiceAdd$).
@@ -167,7 +202,8 @@ const model = (intents) => {
           shareReplay(1);
 
     return {
-        timers$
+        timers$,
+        singleListening$
     };
 };
 
@@ -205,20 +241,35 @@ const timerComponent = (timerModel, canRemove) => {
     // FIXME: increment/decrement helper buttons for each
     // TODO: hours?
     const editor = h('div', {className: 'editor'}, [
-        minutesInput.tree, ':', secondsInput.tree
+        minutesInput.tree,
+        h('span', {className: 'editor__separator'}, ':'),
+        secondsInput.tree
     ]);
+    // TODO: update name
+    const nameInput = input('text', {
+        className: 'timer-name-input',
+        value: timerModel.name,
+        placeholder: 'Enter name…'
+    });
+    const rename$ = nameInput.events.value$;
     const timerContent = timerModel.editing ?
           [
-              editor,
-              editDoneButton.tree,
-              editCancelButton.tree
+              h('div', {className: 'timer-name'}, nameInput.tree),
+              h('div', {className: 'timer-main'}, [
+                  editor,
+                  editDoneButton.tree,
+                  editCancelButton.tree
+              ])
           ] :
           [
-              editableCountdown.tree,
-              timerModel.running ? pauseButton.tree : startButton.tree,
-              h('div', {className: 'timer-actions'}, [
-                  resetButton.tree,
-                  removeButton.tree
+              h('div', {className: 'timer-name timer-name--display'}, timerModel.name || ' '),
+              h('div', {className: 'timer-main'}, [
+                  editableCountdown.tree,
+                  timerModel.running ? pauseButton.tree : startButton.tree,
+                  h('div', {className: 'timer-actions'}, [
+                      resetButton.tree,
+                      removeButton.tree
+                  ])
               ])
           ];
     const timerClasses = 'timer ' + (timerModel.finished ? 'timer--finished' : '');
@@ -247,6 +298,7 @@ const timerComponent = (timerModel, canRemove) => {
     return {
         tree$,
         events: {
+            rename$,
             start$,
             pause$,
             edit$,
@@ -301,12 +353,18 @@ const mainComponent = (model) => {
     const removeTimer$ = timerList$.flatMap(({timersRemove$}) => timersRemove$);
     const newTimerButton = materialLabelledIconButton('add', 'New timer', {className: 'add-timer'});
     const addTimer$ = newTimerButton.events.clicks$;
-    const voiceButton = materialLabelledIconButton('keyboard_voice', 'Talk', {className: 'start-voice'});
+    const voiceButton = materialLabelledIconButton('keyboard_voice', 'Talk', {
+        className: 'start-voice'
+    });
+    const voiceActiveStopButton = materialLabelledIconButton('keyboard_voice', 'Cancel', {
+        className: 'stop-voice'
+    });
+    // TODO: toggle to continuous listening
+    const finishVoice$ = voiceActiveStopButton.events.clicks$.map({});
     const listenVoice$ = voiceButton.events.clicks$.map({});
-    // FIXME: visual feedback (or even full mode) when listening
     // TODO: "always-on" switch (after listening)
-    const voiceTree = h('div', {className: 'voice'}, [
-        voiceButton.tree
+    const voiceTree = h$('div', {className: 'voice'}, [
+        model.singleListening$.map(listening => listening ? voiceActiveStopButton.tree : voiceButton.tree)
     ]);
     // TODO: settings: sound, vibration, prevent sleep, theme
     const tree$ = h$('main', {className: 'main'}, [
@@ -324,7 +382,8 @@ const mainComponent = (model) => {
             editTimer$,
             editDoneTimer$,
             removeTimer$,
-            listenVoice$
+            listenVoice$,
+            finishVoice$
         }
     };
 };
@@ -332,29 +391,29 @@ const mainComponent = (model) => {
 
 
 
-const proxy = {
-    timerUpdates$: new Subject(),
-    addTimer$: new Subject(),
-    resetTimer$: new Subject(),
-    editTimer$: new Subject(),
-    editDoneTimer$: new Subject(),
-    removeTimer$: new Subject(),
-    listenVoice$: new Subject(),
-    // finishVoice$: new Subject(),
-    // cancelVoice$: new Subject(),
-};
+const proxy = {};
+
+const events = [
+    'timerUpdates$',
+    'addTimer$',
+    'resetTimer$',
+    'editTimer$',
+    'editDoneTimer$',
+    'removeTimer$',
+    'listenVoice$',
+    'finishVoice$',
+];
+
+events.forEach(name => {
+    proxy[name] = Observable.defer(() => theView.events$[name]);
+});
 
 const theView = mainComponent(model(proxy));
 
-Object.keys(theView.events$).forEach(name => {
-    console.log(name, theView.events$[name]);
-    theView.events$[name].subscribe(
-        (value) => proxy[name].onNext(value)
-    )
-});
-
 const out = document.querySelector('main');
 const rendering$ = renderTo$(theView.tree$, out);
+
+// FIXME: keep screen from sleeping
 
 // FIXME: also trigger sound (configurable)
 const vibrations$ = theView.

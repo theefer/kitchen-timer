@@ -15,16 +15,15 @@ export function captureSpeech$() {
     recognition.lang = 'en-US';
     // recognition.interimResults = false;
     // recognition.maxAlternatives = 1;
-    // recognition.continuous = true;
+    recognition.continuous = true;
     // recognition.interimResults = true;
 
     const speech$ = Observable.create(observer => {
-        console.log("NOW");
         recognition.addEventListener('result', (event) => {
-            console.log(event);
             console.log(event.results);
-            var transcript = event.results[0][0].transcript;
-            observer.onNext(transcript)
+            var transcript = event.results[event.results.length - 1][0].transcript.trim();
+            observer.onNext(transcript);
+            console.log("GOT", transcript);
         });
         recognition.addEventListener('error', () => observer.onError());
         recognition.addEventListener('end', () => observer.onCompleted());

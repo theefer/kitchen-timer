@@ -37,6 +37,8 @@
 
 .timer {
     margin-top: 1em;
+}
+.timer-main {
     display: flex;
 }
 .timer-actions {
@@ -67,6 +69,10 @@
     font-size: 5rem;
 }
 
+/* .timer__edit { */
+/*     line-height: 2em; */
+/* } */
+
 .timer__edit-done,
 .timer__edit-cancel,
 .timer__start,
@@ -89,6 +95,17 @@
     font-size: 2em;
     --icon-size: 2;
 }
-/* .add-timer .material-icons { */
-/*     font-size: 48px; /\* 2x *\/ */
-/* } */
+
+.timer-name-input {
+    font: inherit;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    outline: none;
+    /* TODO: a11y? */
+}
+
+.stop-voice i {
+    color: #F44336;
+    /* TODO: flashing? */
+}
