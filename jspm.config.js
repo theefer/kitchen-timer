@@ -44,6 +44,7 @@ SystemJS.config({
     "immutable": "npm:immutable@3.8.1",
     "left-pad": "npm:left-pad@1.1.0",
     "module": "github:jspm/nodelibs-module@0.2.0-alpha",
+    "nosleep.js": "npm:nosleep.js@0.5.1",
     "path": "github:jspm/nodelibs-path@0.2.0-alpha",
     "process": "github:jspm/nodelibs-process@0.2.0-alpha",
     "rx": "npm:rx@4.1.0",
