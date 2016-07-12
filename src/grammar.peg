@@ -1,0 +1,28 @@
+grammar TimerCommands
+
+command       <- startCommand / stopCommand / createCommand
+startCommand  <- "start" (__ timerName)? <StartCommand>
+stopCommand   <- "stop" (__ timerName)? <StopCommand>
+createCommand <- ("new" __)? timerDef (__ "timer")? (__ description)? <CreateCommand>
+timerDef      <- minutes:minutesDef (__ secondsDef)? <Duration>
+               / (minutesDef __)? secondsDef
+# hoursDef     <- digits (__ andHalf)? __ "hour" "s"? (__ andHalf)?
+minutesDef    <- digits (__ andHalf)? __ "minute" "s"? (__ andHalf)?
+secondsDef    <- digits (__ andHalf)? __ "second" "s"? (__ andHalf)?
+description   <- ("for" (__ "the")? __)? timerName
+timerName     <- [a-z0-9] [a-z0-9 ]* <data>
+digits        <- [1-9] [0-9]? <number>
+andHalf       <- "and a half"
+__            <- " "+
+
+# grammar URL
+
+# url       <-  scheme "://" host pathname search hash?
+# scheme    <-  "http" "s"? / "ftp"
+# host      <-  hostname port?
+# hostname  <-  segment ("." segment)*
+# segment   <-  [a-z0-9-]+
+# port      <-  ":" [0-9]+
+# pathname  <-  "/" [^ ?]*
+# search    <-  ("?" query:[^ #]*)?
+# hash      <-  "#" [^ ]*
