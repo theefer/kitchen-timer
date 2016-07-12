@@ -1,4 +1,5 @@
 import {h} from 'virtual-dom';
+// TODO: use RxJS 5
 // import {Observable} from 'rxjs-es/Rx';
 import {Observable, Subject} from 'rx';
 import {List, is as immutableIs} from 'immutable';
@@ -40,16 +41,26 @@ const materialLabelledIconButton = (iconName, label, attrs = {}) => {
     return button([icon, label], fullAttrs);
 };
 
-const input = (type, value, attrs) => {
+const input = (type, value, attrs, options = {}) => {
     const input$ = new Subject();
+    const focus$ = new Subject();
+    const keypress$ = new Subject();
     const tree = h('input', Object.assign({}, attrs, {
         type: type,
         value: value,
-        oninput: (event) => input$.onNext(event)
+        onkeypress: (event) => {
+            if (options.preventDefault) {
+                event.preventDefault();
+            }
+            keypress$.onNext(event);
+        },
+        oninput:    (event) => input$.onNext(event)
     }));
     return {
         tree,
         events: {
+            focus$: focus$.asObservable(),
+            keypress$: keypress$.asObservable(),
             input$: input$.asObservable(),
             value$: input$.map(event => event.target.value).startWith(value)
         }
@@ -103,7 +114,7 @@ const updateTimer = (timer, type) => {
     }
 };
 
-const model = (intents) => {
+const model = (intents, initialValue) => {
     const ticker$ = Observable.interval(1000);
     const applyTime$ = ticker$.map(_ => timers => {
         return timers.map(timer => {
@@ -145,14 +156,24 @@ const model = (intents) => {
         // catch(() => '').
         do(transcript => console.log('Heard:', transcript)).
         // TODO: saner grammer?
-        // FIXME: understand more commands: start, stop, reset, change, rename, help
+        // FIXME: understand more commands: reset, change, rename, help
         map(parseVoiceCommand).
         share();
     const voiceAdd$ = voiceCapture$.
         // TODO: error if failed to understand (!= 0)
-        filter(result => result && result.duration > 0).
-        map(({name, duration}) => timers => {
-            return timers.concat(timerModel(duration, {name}));
+        filter(result => !!result).
+        map(({type, duration, name}) => {
+            if (type === 'create') {
+                return timers => timers.concat(timerModel(duration, {name}));
+            } else if (type === 'start') {
+                // TODO: latest created
+                // FIXME: or by name
+                return timers => timers.update(-1, timer => timer.start());
+            } else if (type === 'stop') {
+                // TODO: latest created
+                // FIXME: or by name
+                return timers => timers.update(-1, timer => timer.pause());
+            }
         });
     const voiceError$ = voiceCapture$.
         // TODO: error if failed to understand (!= 0)
@@ -168,7 +189,7 @@ const model = (intents) => {
           scan(
               (timers, stepF) => stepF(timers),
               // TODO: each ticker should each be a stream?
-              List.of(timerModel(300))
+              initialValue
           ).
           distinctUntilChanged(null, immutableIs).
           do(m => console.log("new model", m)).
@@ -186,6 +207,85 @@ const model = (intents) => {
     };
 };
 
+const numberInput = (initialValue, attrs = {}) => {
+    const width = 2;
+
+    const valueProxy$ = Observable.defer(() => value$);
+
+    const inputElement$ = valueProxy$.map(value => {
+        const valueStr = leftPad(value, width, 0);
+        // Note: can't use type=number as that doesn't allow for leading 0's
+        const inputElement = input('text', valueStr, Object.assign({}, attrs, {
+            pattern: '[0-6][0-9]'
+        }), {preventDefault: true});
+        return inputElement;
+    }).
+          shareReplay(1);
+
+    // FIXME: special handling to never excede the field, overwrite
+    // instead, then move to next field
+    const keypress$ = inputElement$.flatMap(el => el.events.keypress$);
+    const value$ = keypress$.
+          filter(event => event.key.match(/[0-9]/)).
+          map(event => {
+              const {key, target} = event;
+              const {selectionStart, selectionEnd, value} = target;
+              return value.slice(0, selectionStart) + key + value.slice(selectionEnd);
+          }).
+          map(str => parseInt(str, 10)).
+          startWith(initialValue).
+          shareReplay(1);
+
+    // FIXME: on focus, move caret to very start (or even hidden?)
+    const focus$ = inputElement$.flatMap(el => el.events.focus$);
+
+    const tree$ = inputElement$.map(el => el.tree);
+
+    return {tree$, value$};
+};
+
+const countdownComponent = (model) => {
+    const minutes = model.remainingMinutes;
+    const seconds = model.remainingSeconds;
+    const minutesStr = leftPad(minutes, 2, 0);
+    const secondsStr = leftPad(seconds, 2, 0);
+    const tree = h('div', {className: 'countdown'}, [
+        h('span', {className: 'countdown__minutes'}, [''+minutesStr]),
+        ':',
+        h('span', {className: 'countdown__seconds'}, [''+secondsStr])
+    ]);
+    return {tree};
+};
+
+const countdownEditorComponent = (model) => {
+    const minutes = model.remainingMinutes;
+    const seconds = model.remainingSeconds;
+    const secondsStr = leftPad(seconds, 2, 0);
+    const minutesInput = numberInput(minutes, {
+        className: 'editor__input editor__minutes'
+    });
+    const secondsInput = input('text', secondsStr, {
+        className: 'editor__input editor__seconds',
+        pattern: '[0-6][0-9]'
+    });
+    // TODO: onscreen number pad?
+    // TODO: hours?
+    const tree$ = h$('div', {className: 'editor'}, [
+        minutesInput.tree$,
+        h('span', {className: 'editor__separator'}, ':'),
+        secondsInput.tree
+    ]);
+    const minutesValue$ = minutesInput.value$;
+    // TODO: same with seconds
+    const secondsValue$ = secondsInput.events.value$.
+          map(value => parseInt(value, 10));
+    return {
+        tree$,
+        minutesValue$,
+        secondsValue$
+    };
+};
+
 const timerComponent = (timerModel, canRemove) => {
     const minutes = timerModel.remainingMinutes;
     const seconds = timerModel.remainingSeconds;
@@ -199,45 +299,26 @@ const timerComponent = (timerModel, canRemove) => {
     const editCancelButton = materialIconButton('close', 'Cancel', {className: 'timer__edit-cancel'});
     const resetButton = materialIconButton('replay', 'Reset', {className: 'timer__reset', disabled: timerModel.pristine});
     const removeButton = materialIconButton('delete', 'Remove', {className: 'timer__remove', disabled: ! canRemove});
-    const countdown = h('div', {className: 'countdown'}, [
-        h('span', {className: 'countdown__minutes'}, [''+minutesStr]),
-        ':',
-        h('span', {className: 'countdown__seconds'}, [''+secondsStr])
-    ]);
+    const countdown = countdownComponent(timerModel).tree;
     const editableCountdown = button(countdown, {className: 'unstyled-button timer__edit'});
-    // Note: can't use type=number as that doesn't allow for leading 0's
-    // FIXME: special handling to never excede the field, overwrite instead
-    const minutesInput = input('text', minutesStr, {
-        className: 'editor__input editor__minutes',
-        pattern: '[0-6][0-9]'
-    });
-    const secondsInput = input('text', secondsStr, {
-        className: 'editor__input editor__seconds',
-        pattern: '[0-6][0-9]'
-    });
-    // FIXME: increment/decrement helper buttons for each
-    // TODO: hours?
-    const editor = h('div', {className: 'editor'}, [
-        minutesInput.tree,
-        h('span', {className: 'editor__separator'}, ':'),
-        secondsInput.tree
-    ]);
+    const editor = countdownEditorComponent(timerModel);
+    const editableName = button(timerModel.name || ' ', {className: 'unstyled-button'});
     const nameInput = input('text', timerModel.name, {
         className: 'timer-name-input',
         placeholder: 'Enter name…'
     });
     const nameValue$ = nameInput.events.value$;
-    const timerContent = timerModel.editing ?
+    const timerContent$ = timerModel.editing ?
           [
               h('div', {className: 'timer-name'}, nameInput.tree),
-              h('div', {className: 'timer-main'}, [
-                  editor,
+              h$('div', {className: 'timer-main'}, [
+                  editor.tree$,
                   editDoneButton.tree,
                   editCancelButton.tree
               ])
           ] :
           [
-              h('div', {className: 'timer-name timer-name--display'}, timerModel.name || ' '),
+              h('div', {className: 'timer-name timer-name--display'}, editableName.tree),
               h('div', {className: 'timer-main'}, [
                   editableCountdown.tree,
                   timerModel.running ? pauseButton.tree : startButton.tree,
@@ -248,15 +329,28 @@ const timerComponent = (timerModel, canRemove) => {
               ])
           ];
     const timerClasses = 'timer ' + (timerModel.finished ? 'timer--finished' : '');
-    const tree$ = Observable.of(h('div', {className: timerClasses}, timerContent));
+    const tree$ = h$('div', {className: timerClasses}, timerContent$);
     const start$ = startButton.events.clicks$.map({});
     const pause$ = pauseButton.events.clicks$.map({});
-    const edit$ = editableCountdown.events.clicks$.map({});
+    const edit$ = Observable.merge(
+        editableName.events.clicks$,
+        editableCountdown.events.clicks$
+    ).map({});
     // TODO: need validation?
-    const minutesValue$ = minutesInput.events.value$.
-          map(value => parseInt(value, 10));
-    const secondsValue$ = secondsInput.events.value$.
-          map(value => parseInt(value, 10));
+    // const minutesValue$ = minutesInput.events.value$.
+    //       map(value => parseInt(value, 10));
+    // TODO: loop value back into input, allowing custom field update even if event is cancelled
+    // const minutesValue$ = minutesInput.events.keypress$.
+    //       filter(event => event.key.match(/[0-9]/)).
+    //       map(event => {
+    //           const {key, target} = event;
+    //           const {selectionStart, selectionEnd, value} = target;
+    //           return value.slice(0, selectionStart) + key + value.slice(selectionEnd);
+    //       }).
+    //       map(value => parseInt(value, 10)).
+    //       startWith(minutes);
+    const minutesValue$ = editor.minutesValue$;
+    const secondsValue$ = editor.secondsValue$;
     const durationValue$ = Observable.combineLatest(
         minutesValue$, secondsValue$, (min, sec) => toDuration(min, sec)
     );
@@ -326,15 +420,14 @@ const mainComponent = (model) => {
     const removeTimer$ = timerList$.flatMap(({timersRemove$}) => timersRemove$);
     const newTimerButton = materialLabelledIconButton('add', 'New timer', {className: 'add-timer'});
     const addTimer$ = newTimerButton.events.clicks$;
-    // FIXME: bigger voice, smaller manual UI
-    // FIXME: show listened input, errors
-    const voiceButton = materialLabelledIconButton('keyboard_voice', 'Talk', {
+    const voiceButton = materialLabelledIconButton('keyboard_voice', 'Tell me what you need', {
         className: 'start-voice'
     });
     const voiceActiveStopButton = materialLabelledIconButton('keyboard_voice', 'Cancel', {
         className: 'stop-voice'
     });
     // FIXME: continuous listening ("always-on") by default
+    // FIXME: show listened input, errors
     const finishVoice$ = voiceActiveStopButton.events.clicks$.map({});
     const listenVoice$ = voiceButton.events.clicks$.map({});
     const voiceTree = h$('div', {className: 'voice'}, [
@@ -363,26 +456,76 @@ const mainComponent = (model) => {
 };
 
 
-
-
-const proxy = {};
-
-const events = [
-    'timerUpdates$',
-    'addTimer$',
-    'resetTimer$',
-    'editTimer$',
-    'editDoneTimer$',
-    'removeTimer$',
-    'listenVoice$',
-    'finishVoice$',
-];
-
-events.forEach(name => {
-    proxy[name] = Observable.defer(() => theView.events$[name]);
+// TODO: generic helper to proxy any object of observables
+const eventsProxy = new Proxy({}, {
+    get(target, name) {
+        return Observable.defer(() => {
+            const source = theView && theView.events$;
+            if (! source) {
+                throw new Error('Proxied object not available yet');
+            } else if (! source[name]) {
+                throw new Error(`No such proxied property: ${name}`);
+            } else {
+                return source[name];
+            }
+        });
+    }
 });
 
-const theModel = model(proxy);
+
+const Storage = (key) => {
+    const localStorage = window.localStorage;
+
+    const parseJson = (string) => {
+        try {
+            return JSON.parse(string);
+        } catch (e) {
+            // TODO: Option?
+            return undefined;
+        }
+    };
+
+    const restore = () => {
+        const stringValue = localStorage.getItem(key);
+        return parseJson(stringValue);
+    };
+
+    const persist = (value) => {
+        const jsonValue = JSON.stringify(value);
+        localStorage.setItem(key, jsonValue);
+    };
+
+    return {
+        restore,
+        persist
+    };
+};
+
+const TimerStorage = (storage) => {
+    const restore = () => {
+        const list = List(storage.restore() || []);
+        return list.map(props => timerModel(props.duration, {name: props.name}));
+    };
+
+    const persist = (timers) => {
+        const list = timers.
+              map(timer => ({duration: timer.duration, name: timer.name || ''})).
+              toJS();
+        storage.persist(list);
+    };
+
+    return {
+        restore,
+        persist
+    };
+};
+
+const timerStorage = TimerStorage(Storage('kitchen-timer'));
+const defaultTimers = List.of(timerModel(300, {name: 'Default'}));
+const storedTimers = timerStorage.restore();
+const initialTimers = storedTimers.isEmpty() ? defaultTimers : storedTimers;
+
+const theModel = model(eventsProxy, initialTimers);
 const theView = mainComponent(theModel);
 
 const out = document.querySelector('main');
@@ -402,14 +545,18 @@ const preventSleep$ = theModel.
       hasTimerRunning$.
       do(hasTimerRunning => hasTimerRunning ? noSleep.enable() : noSleep.disable());
 
-// FIXME: persist state to localStorage, init from it
-// TODO: manifest, add to Homescreen
+const persist$ = theModel.
+      timers$.
+      do(timerStorage.persist);
+
+// TODO: manifest, add to Homescreen, theme (android url bar)
 // TODO: usage analytics
 // FIXME: try Background Sync API to function even when backgrounded?
 const execution = Observable.merge(
     rendering$,
     vibrations$,
     beeps$,
-    preventSleep$
+    preventSleep$,
+    persist$
 ).
       subscribeOnError(err => console.error(err));

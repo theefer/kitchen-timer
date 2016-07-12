@@ -25,7 +25,7 @@ export function h$(tagName, attributes, children) {
         children = attributes;
     }
     return sequenceCombine$(children).
-        map(views => h(tagName, attributes, [...views]));
+        map(views => h(tagName, attributes, views));
 }
 
 export function renderTo$(tree$, node) {

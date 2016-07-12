@@ -18,19 +18,51 @@ const parseNumber = (str) => {
     return str && numberMap[str] || parseInt(str, 10);
 };
 
-const parser = /^(?:(\d+|one|two|three|four|five|six|seven|eight|nine)( and a half)? minutes?)?(?:(?: and ?)?(\d+|one) seconds?|( and a half))?(?: (?:for )?(?:the )?(.+))?$/;
-export const parseVoiceCommand = (transcript) => {
-    const match = transcript.match(parser);
+const createParser = /^(?:(\d+|one|two|three|four|five|six|seven|eight|nine)( and a half)? minutes?)?(?:(?: and ?)?(\d+|one) seconds?|( and a half))?(?: (?:for )?(?:the )?(.+))?$/;
+export const parseCreate = (transcript) => {
+    const match = transcript.match(createParser);
     let result;
     if (match) {
         const [_, minutesStr, half1, secondsStr, half2, name] = match;
         const minutes = parseNumber(minutesStr) || 0;
         const seconds = parseNumber(secondsStr) ||
-            ((half1 || half2) && 30) || 0;
-        result = {
-            name: name && capitalize(name) || '',
-            duration: toDuration(minutes, seconds)
-        };
+              ((half1 || half2) && 30) || 0;
+        const duration = toDuration(minutes, seconds);
+        if (duration > 0) {
+            result = {
+                type: 'create',
+                name: name && capitalize(name) || '',
+                duration: duration
+            };
+        }
     }
     return result;
+};
+
+const startParser = /^start(?:(?: the)? (.+))?$/;
+export const parseStart = (transcript) => {
+    const match = transcript.match(startParser);
+    if (match) {
+        const [_, name] = match;
+        return {
+            type: 'start',
+            name: name
+        };
+    }
+}
+
+const stopParser = /^(?:stop|pause)(?:(?: the)? (.+))?$/;
+export const parseStop = (transcript) => {
+    const match = transcript.match(stopParser);
+    if (match) {
+        const [_, name] = match;
+        return {
+            type: 'stop',
+            name: name
+        };
+    }
+}
+
+export const parseVoiceCommand = (transcript) => {
+    return parseCreate(transcript) || parseStart(transcript) || parseStop(transcript);
 };

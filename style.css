@@ -91,9 +91,10 @@
 }
 
 .add-timer {
+    color: #aaa;
     margin: 1em 0;
-    font-size: 2em;
-    --icon-size: 2;
+    font-size: 1.5em;
+    --icon-size: 1.5;
 }
 
 .timer-name-input {
@@ -103,6 +104,11 @@
     margin: 0;
     outline: none;
     /* TODO: a11y? */
+}
+
+.start-voice,
+.stop-voice {
+    --icon-size: 2;
 }
 
 .stop-voice i {
