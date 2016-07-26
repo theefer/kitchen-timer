@@ -64,5 +64,6 @@ export const parseStop = (transcript) => {
 }
 
 export const parseVoiceCommand = (transcript) => {
+    // TODO: use grammar
     return parseCreate(transcript) || parseStart(transcript) || parseStop(transcript);
 };

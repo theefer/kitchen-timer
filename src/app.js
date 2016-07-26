@@ -114,6 +114,17 @@ const updateTimer = (timer, type) => {
     }
 };
 
+const updateTimerByName = (name, func) => {
+    // TODO: better matching / best matching, not all
+    return timers => timers.map(timer => {
+        if ((timer.name || '').toLowerCase().includes(name)) {
+            return func(timer);
+        } else {
+            return timer;
+        }
+    });
+}
+
 const model = (intents, initialValue) => {
     const ticker$ = Observable.interval(1000);
     const applyTime$ = ticker$.map(_ => timers => {
@@ -151,12 +162,12 @@ const model = (intents, initialValue) => {
     const voiceCapture$ = intents.listenVoice$.
         // Capture speech until done or finish voice triggered
         // Need .first() to only wait for a single signal
-        flatMap(() => captureSpeech$().amb(intents.finishVoice$.map('')).first()).
+        flatMap(() => captureSpeech$().amb(intents.finishVoice$.map('').first())).
         // TODO: handle speech error?
         // catch(() => '').
         do(transcript => console.log('Heard:', transcript)).
-        // TODO: saner grammer?
-        // FIXME: understand more commands: reset, change, rename, help
+        // TODO: saner grammer? (PEG)
+        // TODO: understand more commands: help, reset, delete, change, rename
         map(parseVoiceCommand).
         share();
     const voiceAdd$ = voiceCapture$.
@@ -166,13 +177,19 @@ const model = (intents, initialValue) => {
             if (type === 'create') {
                 return timers => timers.concat(timerModel(duration, {name}));
             } else if (type === 'start') {
-                // TODO: latest created
-                // FIXME: or by name
-                return timers => timers.update(-1, timer => timer.start());
+                if (name) {
+                    return updateTimerByName(name, timer => timer.start());
+                } else {
+                    // FIXME: apply to latest targeted
+                    return timers => timers.update(-1, timer => timer.start());
+                }
             } else if (type === 'stop') {
-                // TODO: latest created
-                // FIXME: or by name
-                return timers => timers.update(-1, timer => timer.pause());
+                if (name) {
+                    return updateTimerByName(name, timer => timer.pause());
+                } else {
+                    // FIXME: apply to latest targeted
+                    return timers => timers.update(-1, timer => timer.pause());
+                }
             }
         });
     const voiceError$ = voiceCapture$.
@@ -180,7 +197,7 @@ const model = (intents, initialValue) => {
         filter(result => ! (result && result.duration > 0));
     const singleListening$ = Observable.merge(
         intents.listenVoice$.map(true),
-        voiceCapture$.map(false)
+        intents.finishVoice$.map(false)
     ).startWith(false);
     const init = timers => timers;
     const timers$ = Observable.
@@ -423,10 +440,9 @@ const mainComponent = (model) => {
     const voiceButton = materialLabelledIconButton('keyboard_voice', 'Tell me what you need', {
         className: 'start-voice'
     });
-    const voiceActiveStopButton = materialLabelledIconButton('keyboard_voice', 'Cancel', {
+    const voiceActiveStopButton = materialLabelledIconButton('keyboard_voice', 'Stop', {
         className: 'stop-voice'
     });
-    // FIXME: continuous listening ("always-on") by default
     // FIXME: show listened input, errors
     const finishVoice$ = voiceActiveStopButton.events.clicks$.map({});
     const listenVoice$ = voiceButton.events.clicks$.map({});
@@ -435,9 +451,9 @@ const mainComponent = (model) => {
     ]);
     // TODO: settings: sound, vibration, prevent sleep, theme
     const tree$ = h$('main', {className: 'main'}, [
+        speechAvailable ? voiceTree : null,
         timerListTree$,
         newTimerButton.tree,
-        speechAvailable ? voiceTree : null
     ]);
     return {
         tree$,
@@ -551,7 +567,7 @@ const persist$ = theModel.
 
 // TODO: manifest, add to Homescreen, theme (android url bar)
 // TODO: usage analytics
-// FIXME: try Background Sync API to function even when backgrounded?
+// TODO: use notifications to trigger alarm when backgrounded (??)
 const execution = Observable.merge(
     rendering$,
     vibrations$,
