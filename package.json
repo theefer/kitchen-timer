@@ -6,7 +6,7 @@
   "scripts": {
     "start": "python3 -m http.server 8700",
     "compile-grammar": "canopy src/grammar.peg --js src/grammar.js",
-    "build": "jspm bundle src/app.js dist/bundle.js --inject",
+    "build": "jspm bundle src/app.js dist/bundle.js --inject --minify",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Sébastien Cevey <seb@cine7.net>",
