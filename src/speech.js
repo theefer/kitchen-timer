@@ -4,19 +4,16 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 
 export const speechAvailable = !! SpeechRecognition;
 
-export function captureSpeech$() {
+export function captureSpeechSimple$() {
     if (! speechAvailable) {
         console.log('captureSpeech called but not available');
         return Observable.never();
     }
 
     const recognition = new SpeechRecognition();
-    // recognition.lang = 'en-GB';
     recognition.lang = 'en-US';
-    // recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.continuous = true;
-    // recognition.interimResults = true;
 
     const speech$ = Observable.create(observer => {
         recognition.addEventListener('result', (event) => {
@@ -37,10 +34,9 @@ export function captureSpeech$() {
     return speech$;
 }
 
-export function captureSpeech2$() {
+function createSpeechRecognition() {
     if (! speechAvailable) {
-        console.log('captureSpeech called but not available');
-        return Observable.never();
+        return;
     }
 
     const recognition = new SpeechRecognition();
@@ -50,39 +46,75 @@ export function captureSpeech2$() {
     recognition.continuous = true;
     recognition.interimResults = true;
 
-    const speech$ = Observable.create(observer => {
-        recognition.addEventListener('result', (event) => {
-            observer.onNext(event.results);
+    return recognition;
+}
+
+function listenSpeech$(recognition) {
+    return Observable.create(observer => {
+        let stopped = false;
+        recognition.addEventListener('result', (event) => observer.onNext(event));
+        recognition.addEventListener('error',  (error) => observer.onError(error));
+        // recognition.addEventListener('end',    ()      => recognition.start());
+        recognition.addEventListener('end',    () => {
+            console.log("END, restart", stopped);
+            if (! stopped)
+                recognition.start()
         });
-        recognition.addEventListener('error', () => observer.onError());
-        recognition.addEventListener('end', () => observer.onCompleted());
-        // FIXME: restart on end if not end requested
+
+        // TODO: re-start if still listened to?
+
+        // FIXME: not cancelled on unsubscribe?
 
         recognition.start();
         return () => {
+            stopped = true
+            console.log("dispose, stop");
             recognition.stop();
         };
-    }).map(results => Array.from(results)).share()
+    });
+}
 
-    const finalSeen$ = speech$
+function getResultTranscripts(result) {
+    return Array.from(result).map(alt => alt.transcript.trim());
+}
+
+function aggregateResults$(speech$) {
+    const speechResults$ = speech$
+          .map(events => Array.from(events.results))
+          .share();
+
+    const finalSeen$ = speechResults$
           .map(results => results.filter(res => res.isFinal).length)
           .filter(len => len > 0)
-          .distinctUntilChanged()
-          // .do(x => console.log(`final! ${x}`))
+          .distinctUntilChanged();
 
-    const out$ = speech$.map(results => {
-        const x = results.map(alt => Array.from(alt).map(a => a.transcript.trim()))
-        // console.log('OUT', results);
-        return x
-    }).window(finalSeen$).map(arr$ => arr$.map(arr => arr.slice(-1)[0]))
+    const out$ = speechResults$.map(results => {
+        const lastResult = results.slice(-1)[0];
+        if (lastResult.isFinal) {
+            // Return final result
+            return getResultTranscripts(lastResult);
+        } else {
+            // Concatenate sequence of non-final results
+            const nonFinalResults = results.filter(res => !res.isFinal);
+            const nonFinalTranscripts = nonFinalResults.map(getResultTranscripts);
+            return [nonFinalTranscripts.join(' ')];
+        }
+    }).window(finalSeen$);
     return out$
-    // const out$ = speech$.scan((speeches, results) => {
-    //     const lastResult = results[results.length - 1];
-    //     if (lastResult && lastResult.isFinal) {
+}
 
-    //     } else {
-    //     }
-    // });
+// Exposed for testing
+export const _aggregateResults$ = aggregateResults$;
+
+
+export function captureSpeech$() {
+    const recognition = createSpeechRecognition();
+    if (! recognition) {
+        console.log('captureSpeech$ called but no speech available');
+        return Observable.never();
+    }
+
+    return aggregateResults$(listenSpeech$(recognition));
 
     /*
       - several non-final results
@@ -103,10 +135,10 @@ export function captureSpeech2$() {
     */
 }
 
-captureSpeech2$().subscribe(
+captureSpeech$().takeUntil(Observable.timer(500)).subscribe(
     phrases$ => {
         phrases$.subscribe(
-            phrases => console.log('phrase', phrases),
+            phrases => console.log('phrase', phrases, phrases),
             e => console.log('phrase ERR', e),
             _ => console.log('phrase END')
         )
@@ -116,27 +148,11 @@ captureSpeech2$().subscribe(
 )
 
 
-// const recognition = new SpeechRecognition();
-// // recognition.lang = 'en-GB';
-// recognition.lang = 'en-US';
-// // recognition.interimResults = false;
-// recognition.maxAlternatives = 3;
-// recognition.continuous = true;
-// recognition.interimResults = true;
 
-// recognition.addEventListener('result', (event) => {
-//     const all = Array.from(event.results).map(res => {
-//         const alternatives = Array.from(res).map(alt => alt.transcript).join(' | ');
-//         return `<${alternatives}> (${res.isFinal})`;
-//     });
-//     console.log(all.join('  '));
-//     // var transcript = event.results[event.results.length - 1][0].transcript.trim();
-//     // console.log("GOT", transcript);
-// });
-// recognition.addEventListener('error', (err) => console.log('ERR', err));
-// recognition.addEventListener('end', (end) => {
-//     console.log('END');
-//     // recognition.start()
-// });
 
-// recognition.start();
+
+
+
+
+
+

@@ -4,6 +4,26 @@
     }
 }
 
+.fill-width {
+    width: 100%;
+}
+
+.layout {
+    display: flex;
+}
+.layout.horizontal {
+    flex-direction: row;
+    align-items: center;
+}
+.layout.vertical {
+    flex-direction: column;
+}
+
+.flex {
+    flex: 1;
+}
+
+
 .unstyled-button,
 .icon-button {
     font: inherit;
@@ -29,6 +49,9 @@
 
 .main {
     font-family: Roboto, sans-serif;
+
+    max-width: 400px;
+    margin: auto;
 
     align-items: center;
     display: flex;
@@ -111,7 +134,7 @@
     --icon-size: 2;
 }
 
-.stop-voice i {
+.stop-voice {
     color: #F44336;
     /* TODO: flashing? */
 }

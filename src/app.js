@@ -13,12 +13,12 @@ import {speechAvailable, captureSpeech$} from './speech';
 import {vibrate} from './vibration';
 import {beep} from './beep';
 
-const button = (label, attrs = {}) => {
+const button = (content, attrs = {}) => {
     const clicks$ = new Subject();
     const tree = h('button', Object.assign({}, attrs, {
         type: 'button',
         onclick: (event) => clicks$.onNext(event)
-    }), label);
+    }), content);
     return {
         tree,
         events: {
@@ -27,15 +27,20 @@ const button = (label, attrs = {}) => {
     };
 };
 
+const materialIcon = (iconName, attrs = {}) => {
+    const className = 'material-icons ' + (attrs.className || '');
+    return h('i', {className: className}, iconName);
+};
+
 const materialIconButton = (iconName, label, attrs = {}) => {
-    const icon = h('i', {className: 'material-icons'}, iconName);
+    const icon = materialIcon(iconName);
     const className = 'icon-button ' + (attrs.className || '');
-    const fullAttrs = Object.assign({}, attrs, {className});
+    const fullAttrs = Object.assign({title: label}, attrs, {className});
     return button(icon, fullAttrs);
 };
 
 const materialLabelledIconButton = (iconName, label, attrs = {}) => {
-    const icon = h('i', {className: 'material-icons'}, iconName);
+    const icon = materialIcon(iconName);
     const className = 'icon-button icon-button-labelled ' + (attrs.className || '');
     const fullAttrs = Object.assign({}, attrs, {className});
     return button([icon, label], fullAttrs);
@@ -159,17 +164,34 @@ const model = (intents, initialValue) => {
     const remove$ = intents.removeTimer$.map((update) => timers => {
         return timers.filter((timer, index) => index !== update.index);
     });
-    const voiceCapture$ = intents.listenVoice$.
+    // const voiceCapture$ = intents.listenVoice$.
+    //     // Capture speech until done or finish voice triggered
+    //     // Need .first() to only wait for a single signal
+    //     flatMap(() => captureSpeech$().amb(intents.finishVoice$.map('').first())).
+    //     // TODO: handle speech error?
+    //     // catch(() => '').
+    //     do(transcript => console.log('Heard:', transcript)).
+    //     // TODO: saner grammer? (PEG)
+    //     // TODO: understand more commands: help, reset, delete, change, rename
+    //     map(parseVoiceCommand).
+    //     share();
+    const voice$ = intents.listenVoice$.
         // Capture speech until done or finish voice triggered
         // Need .first() to only wait for a single signal
-        flatMap(() => captureSpeech$().amb(intents.finishVoice$.map('').first())).
+        // flatMap(() => captureSpeech$().amb(intents.finishVoice$.map(Observable.never()).first())).share();
+        flatMap(() => captureSpeech$().takeUntil(intents.finishVoice$)).share();
+    const voiceCapture$ = voice$.
+        flatMap(phrases$ => phrases$.last()).
         // TODO: handle speech error?
         // catch(() => '').
-        do(transcript => console.log('Heard:', transcript)).
+        do(transcripts => console.log('Heard:', transcripts)).
         // TODO: saner grammer? (PEG)
         // TODO: understand more commands: help, reset, delete, change, rename
-        map(parseVoiceCommand).
+        map(transcripts => transcripts.map(parseVoiceCommand).filter(x => x)[0]).
+        do(res => console.log(res)).
         share();
+    // const voiceHeard$ = voice$.flatMap(phrases$ => phrases$).do(console.log.bind(console));
+    const voiceHeard$ = voice$.flatMap(phrases$ => phrases$).distinctUntilChanged().do(console.log.bind(console));
     const voiceAdd$ = voiceCapture$.
         // TODO: error if failed to understand (!= 0)
         filter(result => !!result).
@@ -220,7 +242,8 @@ const model = (intents, initialValue) => {
     return {
         timers$,
         hasTimerRunning$,
-        singleListening$
+        singleListening$,
+        voiceHeard$,
     };
 };
 
@@ -440,18 +463,40 @@ const mainComponent = (model) => {
     const voiceButton = materialLabelledIconButton('keyboard_voice', 'Tell me what you need', {
         className: 'start-voice'
     });
-    const voiceActiveStopButton = materialLabelledIconButton('keyboard_voice', 'Stop', {
-        className: 'stop-voice'
-    });
-    // FIXME: show listened input, errors
-    const finishVoice$ = voiceActiveStopButton.events.clicks$.map({});
     const listenVoice$ = voiceButton.events.clicks$.map({});
-    const voiceTree = h$('div', {className: 'voice'}, [
-        model.singleListening$.map(listening => listening ? voiceActiveStopButton.tree : voiceButton.tree)
+    // const voiceActiveStopButton = materialLabelledIconButton('keyboard_voice', 'Stop', {
+    //     className: 'stop-voice'
+    // });
+    const voiceHeard$ = model.voiceHeard$.
+          map(phrases => phrases[0]).
+          filter(x => x).
+          startWith('');
+    const voiceHeardText$ = h$('div', {className: 'flex'}, [voiceHeard$]);
+    const voiceActiveStopButton$ = voiceHeardText$.map(voiceHeard => button([
+        materialIcon('keyboard_voice', {className: 'stop-voice'}),
+        voiceHeard,
+        materialIcon('cancel'),
+    ], {
+        className: 'icon-button layout horizontal fill-width'
+    })).shareReplay(1);
+    // FIXME: ^ why needed to share-replay???
+
+    // FIXME: show listened input, errors
+    // const finishVoice$ = voiceActiveStopButton.events.clicks$.map({});
+    // const finishVoice$ = voiceActiveStopButton$.pluck('events', 'clicks$').concatAll().map({});
+    const finishVoice$ = voiceActiveStopButton$.
+          flatMapLatest(b => b.events.clicks$).
+          map({});
+    // const voiceTree = h$('div', {className: 'voice'}, [
+    //     model.singleListening$.map(listening => listening ? voiceActiveStopButton.tree : voiceButton.tree)
+    // ]);
+    const voiceTree$ = h$('div', {className: 'voice fill-width'}, [
+        model.singleListening$.
+            flatMapLatest(listening => listening ? voiceActiveStopButton$.pluck('tree') : Observable.return(voiceButton.tree))
     ]);
     // TODO: settings: sound, vibration, prevent sleep, theme
     const tree$ = h$('main', {className: 'main'}, [
-        speechAvailable ? voiceTree : null,
+        speechAvailable ? voiceTree$ : null,
         timerListTree$,
         newTimerButton.tree,
     ]);
