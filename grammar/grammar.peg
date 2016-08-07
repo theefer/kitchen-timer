@@ -3,7 +3,7 @@ grammar TimerCommands
 command       <- startCommand / stopCommand / createCommand
 startCommand  <- "start" (__ timerName)? <StartCommand>
 stopCommand   <- "stop" (__ timerName)? <StopCommand>
-createCommand <- ("new" __)? timerDef (__ "timer")? (__ description)? <CreateCommand>
+createCommand <- ("new" __)? timerDef (__ "timer")? (__ name:description)? <CreateCommand>
 timerDef      <- minutes:minutesDef (__ secondsDef)? <Duration>
                / (minutesDef __)? secondsDef
 # hoursDef     <- digits (__ andHalf)? __ "hour" "s"? (__ andHalf)?

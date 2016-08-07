@@ -18,8 +18,8 @@ const parseNumber = (str) => {
     return str && numberMap[str] || parseInt(str, 10);
 };
 
-const createParser = /^(?:(\d+|one|two|three|four|five|six|seven|eight|nine)( and a half)? minutes?)?(?:(?: and ?)?(\d+|one) seconds?|( and a half))?(?: (?:for )?(?:the )?(.+))?$/;
-export const parseCreate = (transcript) => {
+const createParser = /^(?:new )?(?:(\d+|one|two|three|four|five|six|seven|eight|nine)( and a half)? minutes?)?(?:(?: and?)?( \d+|one|two|three|four|five|six|seven|eight|nine) seconds?|( and a half))?(?: timer)?(?: (?:for )?(?:the )?(.+))?$/;
+const parseCreate = (transcript) => {
     const match = transcript.match(createParser);
     let result;
     if (match) {
@@ -40,7 +40,7 @@ export const parseCreate = (transcript) => {
 };
 
 const startParser = /^start(?:(?: the)? (.+))?$/;
-export const parseStart = (transcript) => {
+const parseStart = (transcript) => {
     const match = transcript.match(startParser);
     if (match) {
         const [_, name] = match;
@@ -52,7 +52,7 @@ export const parseStart = (transcript) => {
 }
 
 const stopParser = /^(?:stop|pause)(?:(?: the)? (.+))?$/;
-export const parseStop = (transcript) => {
+const parseStop = (transcript) => {
     const match = transcript.match(stopParser);
     if (match) {
         const [_, name] = match;

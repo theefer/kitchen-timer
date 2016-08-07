@@ -2,7 +2,8 @@ SystemJS.config({
   paths: {
     "npm:": "jspm_packages/npm/",
     "github:": "jspm_packages/github/",
-    "kitchen-timer/": "src/"
+    "kitchen-timer/": "src/",
+    "kitchen-timer-grammar/": "grammar/"
   },
   browserConfig: {
     "baseURL": "/"

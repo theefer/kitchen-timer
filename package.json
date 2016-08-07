@@ -4,16 +4,27 @@
   "description": "A kitchen timer as a Progressive Web App",
   "main": "index.js",
   "scripts": {
+    "postinstall": "jspm install",
     "start": "python3 -m http.server 8700",
-    "compile-grammar": "canopy src/grammar.peg --js src/grammar.js",
+    "compile-grammar": "canopy grammar/grammar.peg --js grammar/grammar.js",
     "build": "jspm bundle src/app.js dist/bundle.js --inject --minify",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "karma start test/karma.conf.js",
+    "watch-test": "karma start test/karma.conf.js --auto-watch --no-single-run"
   },
   "author": "Sébastien Cevey <seb@cine7.net>",
   "license": "GPL-3.0",
   "devDependencies": {
     "canopy": "^0.3.0",
-    "jspm": "^0.17.0-beta.22"
+    "chai": "^3.5.0",
+    "jspm": "^0.17.0-beta.22",
+    "karma": "^1.1.2",
+    "karma-chai": "^0.1.0",
+    "karma-chrome-launcher": "^1.0.1",
+    "karma-cli": "^1.0.1",
+    "karma-jspm": "^2.2.0",
+    "karma-mocha": "^1.1.1",
+    "karma-phantomjs2-launcher": "^0.5.0",
+    "mocha": "^3.0.1"
   },
   "jspm": {
     "name": "kitchen-timer",
