@@ -1,6 +1,5 @@
+import {StartCommand, StopCommand, Duration, CreateCommand} from './model/commands';
 import {toDuration} from './util';
-
-const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const numberMap = {
     one:   1,
@@ -18,7 +17,7 @@ const parseNumber = (str) => {
     return str && numberMap[str] || parseInt(str, 10);
 };
 
-const createParser = /^(?:new )?(?:(\d+|one|two|three|four|five|six|seven|eight|nine)( and a half)? minutes?)?(?:(?: and?)?( \d+|one|two|three|four|five|six|seven|eight|nine) seconds?|( and a half))?(?: timer)?(?: (?:for )?(?:the )?(.+))?$/;
+const createParser = /^(?:new )?(?:(\d+|one|two|three|four|five|six|seven|eight|nine)( and a half)? minutes?)?(?:(?: and | )?(\d+|one|two|three|four|five|six|seven|eight|nine) seconds?|( and a half))?(?: timer)?(?: (?:for )?(?:the )?(.+))?$/;
 const parseCreate = (transcript) => {
     const match = transcript.match(createParser);
     let result;
@@ -29,11 +28,10 @@ const parseCreate = (transcript) => {
               ((half1 || half2) && 30) || 0;
         const duration = toDuration(minutes, seconds);
         if (duration > 0) {
-            result = {
-                type: 'create',
-                name: name && capitalize(name) || '',
-                duration: duration
-            };
+            result = CreateCommand({
+                name: name || '',
+                duration: Duration({minutes, seconds})
+            });
         }
     }
     return result;
@@ -44,10 +42,9 @@ const parseStart = (transcript) => {
     const match = transcript.match(startParser);
     if (match) {
         const [_, name] = match;
-        return {
-            type: 'start',
+        return StartCommand({
             name: name
-        };
+        });
     }
 }
 
@@ -56,10 +53,9 @@ const parseStop = (transcript) => {
     const match = transcript.match(stopParser);
     if (match) {
         const [_, name] = match;
-        return {
-            type: 'stop',
+        return StopCommand({
             name: name
-        };
+        });
     }
 }
 

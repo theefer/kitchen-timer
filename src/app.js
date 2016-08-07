@@ -13,6 +13,8 @@ import {speechAvailable, captureSpeech$} from './speech';
 import {vibrate} from './vibration';
 import {beep} from './beep';
 
+import {StartCommand, StopCommand, CreateCommand} from './model/commands';
+
 const button = (content, attrs = {}) => {
     const clicks$ = new Subject();
     const tree = h('button', Object.assign({}, attrs, {
@@ -110,6 +112,8 @@ const timerModel = (duration, params = {}) => {
     };
 };
 
+const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
 const updateTimer = (timer, type) => {
     switch(type) {
     case 'start': return timer.start();
@@ -197,23 +201,30 @@ const model = (intents, initialValue) => {
     const voiceAdd$ = voiceCapture$.
         // TODO: error if failed to understand (!= 0)
         filter(result => !!result).
-        map(({type, duration, name}) => {
-            if (type === 'create') {
-                return timers => timers.concat(timerModel(duration, {name}));
-            } else if (type === 'start') {
+          map(command => {
+            const {name, duration} = command;
+            switch (command.constructor) {
+            case CreateCommand:
+                const durationSeconds = toDuration(duration.minutes, duration.seconds);
+                const capitalizedName = capitalize(name);
+                return timers => timers.concat(timerModel(durationSeconds, {name: capitalizedName}));
+                break;
+            case StartCommand:
                 if (name) {
                     return updateTimerByName(name, timer => timer.start());
                 } else {
                     // FIXME: apply to latest targeted
                     return timers => timers.update(-1, timer => timer.start());
                 }
-            } else if (type === 'stop') {
+                break;
+            case StopCommand:
                 if (name) {
                     return updateTimerByName(name, timer => timer.pause());
                 } else {
                     // FIXME: apply to latest targeted
                     return timers => timers.update(-1, timer => timer.pause());
                 }
+                break;
             }
         });
     const voiceError$ = voiceCapture$.

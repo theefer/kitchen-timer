@@ -13,6 +13,7 @@ module.exports = function(config) {
     proxies: {
         '/src/': '/base/src/',
         '/test/': '/base/test/',
+        '/grammar/': '/base/grammar/',
         '/jspm_packages/': '/base/jspm_packages/'
     },
 
@@ -21,7 +22,7 @@ module.exports = function(config) {
         config: "jspm.config.js",
         // loadFiles: ['test/specs/**/*.spec.js'],
         loadFiles: ['test/**/*.spec.js'],
-        serveFiles: ['src/**/*.js'],
+        serveFiles: ['src/**/*.js', 'grammar/**/*.js'],
 
         stripExtension: false
     },
