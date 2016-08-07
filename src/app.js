@@ -190,8 +190,10 @@ const model = (intents, initialValue) => {
         map(transcripts => transcripts.map(parseVoiceCommand).filter(x => x)[0]).
         do(res => console.log(res)).
         share();
-    // const voiceHeard$ = voice$.flatMap(phrases$ => phrases$).do(console.log.bind(console));
-    const voiceHeard$ = voice$.flatMap(phrases$ => phrases$).distinctUntilChanged().do(console.log.bind(console));
+    const voiceHeard$ = voice$
+          .flatMap(phrases$ => phrases$)
+          .distinctUntilChanged() // TODO: array deep comparison
+          .merge(intents.finishVoice$.map([]));
     const voiceAdd$ = voiceCapture$.
         // TODO: error if failed to understand (!= 0)
         filter(result => !!result).
