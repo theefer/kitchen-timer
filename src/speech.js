@@ -1,4 +1,5 @@
 import {Observable} from 'rx';
+import {Subject} from 'rx';
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -52,23 +53,43 @@ function createSpeechRecognition() {
 function listenSpeech$(recognition) {
     return Observable.create(observer => {
         let stopped = false;
-        recognition.addEventListener('result', (event) => observer.onNext(event));
-        recognition.addEventListener('error',  (error) => observer.onError(error));
-        // recognition.addEventListener('end',    ()      => recognition.start());
-        recognition.addEventListener('end',    () => {
-            console.log("END, restart", stopped);
-            if (! stopped)
-                recognition.start()
+        let currentSubject = null;
+
+        recognition.addEventListener('result', (event) => {
+            if (! currentSubject) {
+                currentSubject = new Subject();
+                observer.onNext(currentSubject.asObservable());
+            }
+            const results = Array.from(event.results);
+            const lastResult = results.slice(-1)[0];
+            if (lastResult.isFinal) {
+                // Return final result
+                currentSubject.onNext(getResultTranscripts(lastResult));
+                currentSubject.onCompleted();
+                currentSubject = null;
+            } else {
+                // Concatenate sequence of non-final results
+                const nonFinalResults = results.filter(res => !res.isFinal);
+                const nonFinalTranscripts = nonFinalResults.map(getResultTranscripts);
+                currentSubject.onNext([nonFinalTranscripts.join(' ')]);
+            }
         });
-
-        // TODO: re-start if still listened to?
-
-        // FIXME: not cancelled on unsubscribe?
+        recognition.addEventListener('error',  (error) => observer.onError(error));
+        recognition.addEventListener('end',    () => {
+            if (stopped) {
+                if (currentSubject) {
+                    // Note: we don't complete the subject
+                    currentSubject = null;
+                }
+                observer.onCompleted();
+            } else {
+                recognition.start();
+            }
+        });
 
         recognition.start();
         return () => {
-            stopped = true
-            console.log("dispose, stop");
+            stopped = true;
             recognition.stop();
         };
     });
@@ -78,35 +99,6 @@ function getResultTranscripts(result) {
     return Array.from(result).map(alt => alt.transcript.trim());
 }
 
-function aggregateResults$(speech$) {
-    const speechResults$ = speech$
-          .map(events => Array.from(events.results))
-          .share();
-
-    const finalSeen$ = speechResults$
-          .map(results => results.filter(res => res.isFinal).length)
-          .filter(len => len > 0)
-          .distinctUntilChanged();
-
-    const out$ = speechResults$.map(results => {
-        const lastResult = results.slice(-1)[0];
-        if (lastResult.isFinal) {
-            // Return final result
-            return getResultTranscripts(lastResult);
-        } else {
-            // Concatenate sequence of non-final results
-            const nonFinalResults = results.filter(res => !res.isFinal);
-            const nonFinalTranscripts = nonFinalResults.map(getResultTranscripts);
-            return [nonFinalTranscripts.join(' ')];
-        }
-    }).window(finalSeen$);
-    return out$
-}
-
-// Exposed for testing
-export const _aggregateResults$ = aggregateResults$;
-
-
 export function captureSpeech$() {
     const recognition = createSpeechRecognition();
     if (! recognition) {
@@ -114,45 +106,17 @@ export function captureSpeech$() {
         return Observable.never();
     }
 
-    return aggregateResults$(listenSpeech$(recognition));
-
-    /*
-      - several non-final results
-      - one final result, multiple alternatives
-      - final result doesn't change
-      - new final result on subsequent listens w same speech recog
-
-      [intermediate segments] (final alternatives) <stream>
-      [a ]                => < <[a]-: :
-      [b ][u ]            => < <[a]-[b,u]: :
-      [bu]                => < <[a]-[b,u]-[bu]: :
-      <c|xF>              => < <[a]-[b,u]-[bu]-(c,x)> :
-      <c|xF>[r ]          => < <[a]-[b,u]-[bu]-(c,x)>-<[r]: :
-      <c|xF>[s ][j ]      => < <[a]-[b,u]-[bu]-(c,x)>-<[r]-[s,j]: :
-      <c|xF><v|y|zF>      => < <[a]-[b,u]-[bu]-(c,x)>-<[r]-[s,j]-(v,y,z)> :
-      <c|xF><v|y|zF>[o ]  => < <[a]-[b,u]-[bu]-(c,x)>-<[r]-[s,j]-(v,y,z)>-<[o]: :
-      <c|xF><v|y|zF><oF>  => < <[a]-[b,u]-[bu]-(c,x)>-<[r]-[s,j]-(v,y,z)>-<[o]-(o)> :
-    */
+    return listenSpeech$(recognition);
 }
 
-captureSpeech$().takeUntil(Observable.timer(500)).subscribe(
-    phrases$ => {
-        phrases$.subscribe(
-            phrases => console.log('phrase', phrases, phrases),
-            e => console.log('phrase ERR', e),
-            _ => console.log('phrase END')
-        )
-    },
-    e => console.log('captured ERR', e),
-    _ => console.log('captured END')
-)
-
-
-
-
-
-
-
-
-
-
+// captureSpeech$().takeUntil(Observable.timer(500)).subscribe(
+//     phrases$ => {
+//         phrases$.subscribe(
+//             phrases => console.log('phrase', phrases, phrases),
+//             e => console.log('phrase ERR', e),
+//             _ => console.log('phrase END')
+//         )
+//     },
+//     e => console.log('captured ERR', e),
+//     _ => console.log('captured END')
+// )

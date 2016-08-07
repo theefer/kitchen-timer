@@ -179,7 +179,7 @@ const model = (intents, initialValue) => {
         // Capture speech until done or finish voice triggered
         // Need .first() to only wait for a single signal
         // flatMap(() => captureSpeech$().amb(intents.finishVoice$.map(Observable.never()).first())).share();
-        flatMap(() => captureSpeech$().takeUntil(intents.finishVoice$)).share();
+        flatMap(() => captureSpeech$().takeUntil(intents.finishVoice$.map(Observable.never()))).share();
     const voiceCapture$ = voice$.
         flatMap(phrases$ => phrases$.last()).
         // TODO: handle speech error?
@@ -464,14 +464,15 @@ const mainComponent = (model) => {
         className: 'start-voice'
     });
     const listenVoice$ = voiceButton.events.clicks$.map({});
-    // const voiceActiveStopButton = materialLabelledIconButton('keyboard_voice', 'Stop', {
-    //     className: 'stop-voice'
-    // });
+
+    const listeningStarted$ = model.singleListening$.filter(listen => listen);
     const voiceHeard$ = model.voiceHeard$.
           map(phrases => phrases[0]).
           filter(x => x).
-          startWith('');
-    const voiceHeardText$ = h$('div', {className: 'flex'}, [voiceHeard$]);
+          startWith('').
+          // TODO: fix filter above to let through empty phrase w/o breaking everything
+          merge(listeningStarted$.map(''));
+    const voiceHeardText$ = h$('div', {className: 'flex align-left'}, [voiceHeard$]);
     const voiceActiveStopButton$ = voiceHeardText$.map(voiceHeard => button([
         materialIcon('keyboard_voice', {className: 'stop-voice'}),
         voiceHeard,
@@ -479,21 +480,18 @@ const mainComponent = (model) => {
     ], {
         className: 'icon-button layout horizontal fill-width'
     })).shareReplay(1);
-    // FIXME: ^ why needed to share-replay???
+    // need to share-replay to ensure the same v-dom is passed down
 
-    // FIXME: show listened input, errors
-    // const finishVoice$ = voiceActiveStopButton.events.clicks$.map({});
-    // const finishVoice$ = voiceActiveStopButton$.pluck('events', 'clicks$').concatAll().map({});
+    // FIXME: show errors
     const finishVoice$ = voiceActiveStopButton$.
           flatMapLatest(b => b.events.clicks$).
           map({});
-    // const voiceTree = h$('div', {className: 'voice'}, [
-    //     model.singleListening$.map(listening => listening ? voiceActiveStopButton.tree : voiceButton.tree)
-    // ]);
+    const voiceStopTree$ = voiceActiveStopButton$.pluck('tree');
     const voiceTree$ = h$('div', {className: 'voice fill-width'}, [
         model.singleListening$.
-            flatMapLatest(listening => listening ? voiceActiveStopButton$.pluck('tree') : Observable.return(voiceButton.tree))
+            flatMapLatest(listening => listening ? voiceStopTree$ : Observable.return(voiceButton.tree))
     ]);
+
     // TODO: settings: sound, vibration, prevent sleep, theme
     const tree$ = h$('main', {className: 'main'}, [
         speechAvailable ? voiceTree$ : null,

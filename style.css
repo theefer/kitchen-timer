@@ -23,6 +23,10 @@
     flex: 1;
 }
 
+.align-left {
+    text-align: left;
+}
+
 
 .unstyled-button,
 .icon-button {
