@@ -8,7 +8,7 @@ import leftPad from 'left-pad';
 
 import {sequenceCombine$, h$, renderTo$} from './rx-util';
 import {toDuration} from './util';
-import {parseVoiceCommand} from './commands';
+import {parseVoiceCommand} from './parser';
 import {speechAvailable, captureSpeech$} from './speech';
 import {vibrate} from './vibration';
 import {beep} from './beep';

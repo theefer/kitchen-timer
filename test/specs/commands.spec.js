@@ -1,4 +1,4 @@
-import {parseVoiceCommand} from 'kitchen-timer/commands';
+import {parseVoiceCommand} from 'kitchen-timer/parser';
 import {StartCommand, StopCommand, Duration, CreateCommand} from 'kitchen-timer/model/commands';
 
 function duration(minutes = 0, seconds = 0) {
@@ -75,6 +75,13 @@ describe('Commands', () => {
                 const cmd = parseVoiceCommand(input);
                 expect(cmd).to.be.command(expected);
             });
+        });
+    });
+
+    describe('No match', () => {
+        it(`doesn't parse "foo"`, () => {
+            const cmd = parseVoiceCommand('foo');
+            expect(cmd).to.be.undefined;
         });
     });
 });
