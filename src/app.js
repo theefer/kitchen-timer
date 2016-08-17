@@ -198,6 +198,10 @@ const model = (intents, initialValue) => {
           .flatMap(phrases$ => phrases$)
           .distinctUntilChanged() // TODO: array deep comparison
           .merge(intents.finishVoice$.map([]));
+    // FIXME: highlight command if matched
+    // FIXME: clear once command executed
+    // FIXME: show error if no command matched
+    // FIXME: catch/retry speech timeout
     const voiceAdd$ = voiceCapture$.
         // TODO: error if failed to understand (!= 0)
         filter(result => !!result).
@@ -213,7 +217,7 @@ const model = (intents, initialValue) => {
                 if (name) {
                     return updateTimerByName(name, timer => timer.start());
                 } else {
-                    // FIXME: apply to latest targeted
+                    // TODO: apply to latest targeted
                     return timers => timers.update(-1, timer => timer.start());
                 }
                 break;
@@ -221,7 +225,7 @@ const model = (intents, initialValue) => {
                 if (name) {
                     return updateTimerByName(name, timer => timer.pause());
                 } else {
-                    // FIXME: apply to latest targeted
+                    // TODO: apply to latest targeted
                     return timers => timers.update(-1, timer => timer.pause());
                 }
                 break;
