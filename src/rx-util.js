@@ -38,3 +38,24 @@ export function renderTo$(tree$, node) {
         map(([last, current]) => diff(last, current)).
         reduce((out, patches) => patch(out, patches), node);
 }
+
+export function proxyObservableMap(lazySource) {
+    let source;
+    return new Proxy({}, {
+        get(target, name) {
+            return Observable.defer(() => {
+                if (! source) {
+                    source = lazySource();
+                    if (! source) {
+                        throw new Error('Proxied object not available yet');
+                    }
+                }
+                if (! source[name]) {
+                    throw new Error(`No such proxied property: ${name}`);
+                } else {
+                    return source[name];
+                }
+            });
+        }
+    });
+}

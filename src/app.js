@@ -6,111 +6,20 @@ import {List, is as immutableIs} from 'immutable';
 import NoSleep from 'nosleep.js';
 import leftPad from 'left-pad';
 
-import {sequenceCombine$, h$, renderTo$} from './rx-util';
+import {sequenceCombine$, h$, renderTo$, proxyObservableMap} from './rx-util';
 import {toDuration} from './util';
 import {parseVoiceCommand} from './parser';
 import {speechAvailable, captureSpeech$} from './speech';
 import {vibrate} from './vibration';
 import {beep} from './beep';
 
+import {button, input} from './components/base';
+import {materialIcon, materialIconButton, materialLabelledIconButton} from './components/material';
+
 import {StartCommand, StopCommand, CreateCommand} from './model/commands';
-
-const button = (content, attrs = {}) => {
-    const clicks$ = new Subject();
-    const tree = h('button', Object.assign({}, attrs, {
-        type: 'button',
-        onclick: (event) => clicks$.onNext(event)
-    }), content);
-    return {
-        tree,
-        events: {
-            clicks$: clicks$.asObservable()
-        }
-    };
-};
-
-const materialIcon = (iconName, attrs = {}) => {
-    const className = 'material-icons ' + (attrs.className || '');
-    return h('i', {className: className}, iconName);
-};
-
-const materialIconButton = (iconName, label, attrs = {}) => {
-    const icon = materialIcon(iconName);
-    const className = 'icon-button ' + (attrs.className || '');
-    const fullAttrs = Object.assign({title: label}, attrs, {className});
-    return button(icon, fullAttrs);
-};
-
-const materialLabelledIconButton = (iconName, label, attrs = {}) => {
-    const icon = materialIcon(iconName);
-    const className = 'icon-button icon-button-labelled ' + (attrs.className || '');
-    const fullAttrs = Object.assign({}, attrs, {className});
-    return button([icon, label], fullAttrs);
-};
-
-const input = (type, value, attrs, options = {}) => {
-    const input$ = new Subject();
-    const focus$ = new Subject();
-    const keypress$ = new Subject();
-    const tree = h('input', Object.assign({}, attrs, {
-        type: type,
-        value: value,
-        onkeypress: (event) => {
-            if (options.preventDefault) {
-                event.preventDefault();
-            }
-            keypress$.onNext(event);
-        },
-        oninput:    (event) => input$.onNext(event)
-    }));
-    return {
-        tree,
-        events: {
-            focus$: focus$.asObservable(),
-            keypress$: keypress$.asObservable(),
-            input$: input$.asObservable(),
-            value$: input$.map(event => event.target.value).startWith(value)
-        }
-    };
-};
-
-const timerModel = (duration, params = {}) => {
-    const name = params.name || '';
-    const remaining = typeof params.remaining !== 'undefined' ? params.remaining : duration;
-    const running = params.running || false;
-    const editing = params.editing || false;
-    return {
-        duration,
-        name,
-        remaining,
-        running,
-        editing, // TODO: or separate state, only one at a time? clear UI, fade others
-        get remainingMinutes() { return Math.floor(remaining / 60); },
-        get remainingSeconds() { return remaining % 60; },
-        get pristine() { return duration == remaining; },
-        get finished() { return remaining == 0; },
-        start() {
-            // TODO: how to call finished() and reset()?
-            if (remaining > 0) {
-                return timerModel(duration, {name, running: true, editing, remaining});
-            } else {
-                // If finished, reset before restarting
-                return timerModel(duration, {name, running: true, editing, remaining: duration});
-            }
-        },
-        pause() { return timerModel(duration, {name, running: false, editing, remaining}); },
-        reset() { return timerModel(duration, {name, running: false, editing, remaining: duration}); },
-        edit() { return timerModel(duration, {name, running: false, editing: true, remaining}); },
-        editDone(newDuration, newName) { return timerModel(newDuration, {name: newName, running, editing: false, remaining: newDuration}); },
-        decrement() {
-            if (remaining > 0) {
-                return timerModel(duration, {name, running, remaining: remaining - 1});
-            } else {
-                return timerModel(duration, {name, running: false, remaining: 0});
-            }
-        },
-    };
-};
+import {timerModel} from './model/timer';
+import {LocalStorage} from './storage/local';
+import {TimerStore} from './store/timer';
 
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -532,76 +441,14 @@ const mainComponent = (model) => {
 };
 
 
-// TODO: generic helper to proxy any object of observables
-const eventsProxy = new Proxy({}, {
-    get(target, name) {
-        return Observable.defer(() => {
-            const source = theView && theView.events$;
-            if (! source) {
-                throw new Error('Proxied object not available yet');
-            } else if (! source[name]) {
-                throw new Error(`No such proxied property: ${name}`);
-            } else {
-                return source[name];
-            }
-        });
-    }
-});
+const intents = proxyObservableMap(() => theView.events$);
 
-
-const Storage = (key) => {
-    const localStorage = window.localStorage;
-
-    const parseJson = (string) => {
-        try {
-            return JSON.parse(string);
-        } catch (e) {
-            // TODO: Option?
-            return undefined;
-        }
-    };
-
-    const restore = () => {
-        const stringValue = localStorage.getItem(key);
-        return parseJson(stringValue);
-    };
-
-    const persist = (value) => {
-        const jsonValue = JSON.stringify(value);
-        localStorage.setItem(key, jsonValue);
-    };
-
-    return {
-        restore,
-        persist
-    };
-};
-
-const TimerStorage = (storage) => {
-    const restore = () => {
-        const list = List(storage.restore() || []);
-        return list.map(props => timerModel(props.duration, {name: props.name}));
-    };
-
-    const persist = (timers) => {
-        const list = timers.
-              map(timer => ({duration: timer.duration, name: timer.name || ''})).
-              toJS();
-        storage.persist(list);
-    };
-
-    return {
-        restore,
-        persist
-    };
-};
-
-const timerStorage = TimerStorage(Storage('kitchen-timer'));
+const timerStore = TimerStore(LocalStorage('kitchen-timer'));
 const defaultTimers = List.of(timerModel(300, {name: 'Default'}));
-const storedTimers = timerStorage.restore();
+const storedTimers = timerStore.restore();
 const initialTimers = storedTimers.isEmpty() ? defaultTimers : storedTimers;
 
-const theModel = model(eventsProxy, initialTimers);
+const theModel = model(intents, initialTimers);
 const theView = mainComponent(theModel);
 
 const out = document.querySelector('main');
@@ -623,7 +470,7 @@ const preventSleep$ = theModel.
 
 const persist$ = theModel.
       timers$.
-      do(timerStorage.persist);
+      do(timerStore.persist);
 
 // TODO: manifest, add to Homescreen, theme (android url bar)
 // TODO: usage analytics
