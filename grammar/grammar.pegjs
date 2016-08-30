@@ -1,9 +1,8 @@
 command        = startCommand / stopCommand / createCommand
 startCommand   = "start" (__ name:timerName)? { return {type: 'start', name: name || ''}; }
 stopCommand    = stopWords (__ name:timerName)? { return {type: 'stop', name: name}; }
-createCommand  = ("new" __)? duration:timerDef (__ "timer")? __ name:description { return {type: 'create', duration: duration, name: name}; }
-               / ("new" __)? duration:timerDef (__ "timer")? { return {type: 'create', duration: duration, name: ''}; }
-// TODO: delete
+createCommand  = createWords duration:timerDef (__ "timer")? __ name:description { return {type: 'create', duration: duration, name: name}; }
+               / createWords duration:timerDef (__ "timer")? { return {type: 'create', duration: duration, name: ''}; }
 timerDef       = minutes:minutesDef __ (and __)? seconds:secondsDef { return minutes * 60 + seconds; }
                / minutes:minutesDef { return minutes * 60; }
                / seconds:secondsDef { return seconds; }
@@ -29,5 +28,6 @@ digitWord      = "one"   { return 1; }
                / "nine"  { return 9; }
 and            = "and"
 andHalf        = "and a half"
+createWords    = (("add" / "create") __)? ("new" __)?
 stopWords      = "stop" / "pause"
 __             = " "+

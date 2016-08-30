@@ -98,7 +98,6 @@ const model = (intents, initialValue) => {
         // TODO: handle speech error?
         // catch(() => '').
         do(transcripts => console.log('Heard:', transcripts)).
-        // TODO: saner grammer? (PEG)
         // TODO: understand more commands: help, reset, delete, change, rename
         map(transcripts => transcripts.map(parseVoiceCommand).filter(x => x)[0]).
         do(res => console.log(res)).
@@ -114,7 +113,7 @@ const model = (intents, initialValue) => {
     const voiceAdd$ = voiceCapture$.
         // TODO: error if failed to understand (!= 0)
         filter(result => !!result).
-          map(command => {
+        map(command => {
             const {name, duration} = command;
             switch (command.constructor) {
             case CreateCommand:

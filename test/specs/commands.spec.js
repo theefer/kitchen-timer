@@ -31,7 +31,10 @@ describe('Commands', () => {
             '2 minutes 45 seconds':     CreateCommand({duration: duration(2, 45)}),
             '2 minutes and 45 seconds': CreateCommand({duration: duration(2, 45)}),
             '2 minute timer':           CreateCommand({duration: duration(2)}),
+            'add 2 minute timer':       CreateCommand({duration: duration(2)}),
+            'create 2 minute timer':    CreateCommand({duration: duration(2)}),
             'new 2 minute timer':       CreateCommand({duration: duration(2)}),
+            'add new 2 minute timer':   CreateCommand({duration: duration(2)}),
             '10 minutes for eggs':      CreateCommand({duration: duration(10), name: 'eggs'}),
             '10 minutes for the eggs':  CreateCommand({duration: duration(10), name: 'eggs'}),
         };
