@@ -28,7 +28,7 @@ export function captureSpeechSimple$() {
 
         recognition.start();
         return () => {
-            recognition.stop();
+            recognition.abort();
         };
     });
 
@@ -44,8 +44,13 @@ function createSpeechRecognition() {
     // recognition.lang = 'en-GB';
     recognition.lang = 'en-US';
     recognition.maxAlternatives = 5;
-    recognition.continuous = true;
     recognition.interimResults = true;
+
+    // Don't use continuous listening mode as Android Chrome then has
+    // a bug whereby all interim results are erroneously marked as
+    // final:
+    //   https://bugs.chromium.org/p/chromium/issues/detail?id=457068
+    // recognition.continuous = true;
 
     return recognition;
 }
@@ -74,7 +79,12 @@ function listenSpeech$(recognition) {
                 currentSubject.onNext([nonFinalTranscripts.join(' ')]);
             }
         });
-        recognition.addEventListener('error',  (error) => observer.onError(error));
+        recognition.addEventListener('error',  (error) => {
+            // If error due to absence of input, ignore (restart listening)
+            if (error.error !== 'no-speech') {
+                observer.onError(error);
+            }
+        });
         recognition.addEventListener('end',    () => {
             if (stopped) {
                 if (currentSubject) {
@@ -90,7 +100,7 @@ function listenSpeech$(recognition) {
         recognition.start();
         return () => {
             stopped = true;
-            recognition.stop();
+            recognition.abort();
         };
     });
 }

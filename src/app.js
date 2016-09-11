@@ -21,6 +21,20 @@ import {timerModel} from './model/timer';
 import {LocalStorage} from './storage/local';
 import {TimerStore} from './store/timer';
 
+// FIXME: UX when timer ends
+// FIXME: UX when elapsed
+
+function between$(start$, end$, betweenValue, otherwiseValue) {
+    return Observable.merge(
+        start$.map(betweenValue),
+        end$.map(otherwiseValue)
+    ).startWith(otherwiseValue);
+}
+
+function isBetween$(start$, end$) {
+    return between$(start$, end$, true, false);
+}
+
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const updateTimer = (timer, type) => {
@@ -41,6 +55,55 @@ const updateTimerByName = (name, func) => {
             return timer;
         }
     });
+}
+
+
+// Capture speech on start$ until finish$ triggered
+function captureVoice$$(start$, finish$) {
+    return start$.flatMap(() => captureSpeech$().takeUntil(finish$));
+}
+
+function processVoice(phrases$$, finish$) {
+    const capture$ = phrases$$.
+        flatMap(phrases$ => phrases$.last()).
+        do(transcripts => console.log('Heard:', transcripts)).
+        // FIXME: understand more commands: help, reset, delete, change, rename, stop listening
+        // FIXME: also return the transcript that parsed successfully
+        map(transcripts => transcripts.map(parseVoiceCommand).filter(x => x)[0]).
+        do(res => console.log(res && res.toJS())).
+        share();
+    // FIXME: highlight command if matched
+    // TODO: show error if no command matched
+    const commands$ = capture$.
+        filter(result => !!result).
+        map(command => {
+            const {name, duration} = command;
+            switch (command.constructor) {
+            case CreateCommand:
+                const durationSeconds = toDuration(duration.minutes, duration.seconds);
+                const capitalizedName = capitalize(name);
+                return timers => timers.concat(timerModel(durationSeconds, {name: capitalizedName}));
+                break;
+            case StartCommand:
+                if (name) {
+                    return updateTimerByName(name, timer => timer.start());
+                } else {
+                    // TODO: apply to latest targeted
+                    return timers => timers.update(-1, timer => timer.start());
+                }
+                break;
+            case StopCommand:
+                if (name) {
+                    return updateTimerByName(name, timer => timer.pause());
+                } else {
+                    // TODO: apply to latest targeted
+                    return timers => timers.update(-1, timer => timer.pause());
+                }
+                break;
+            }
+        });
+    const errors$ = capture$.filter(result => !result);
+    return {commands$, errors$};
 }
 
 const model = (intents, initialValue) => {
@@ -77,82 +140,24 @@ const model = (intents, initialValue) => {
     const remove$ = intents.removeTimer$.map((update) => timers => {
         return timers.filter((timer, index) => index !== update.index);
     });
-    // const voiceCapture$ = intents.listenVoice$.
-    //     // Capture speech until done or finish voice triggered
-    //     // Need .first() to only wait for a single signal
-    //     flatMap(() => captureSpeech$().amb(intents.finishVoice$.map('').first())).
-    //     // TODO: handle speech error?
-    //     // catch(() => '').
-    //     do(transcript => console.log('Heard:', transcript)).
-    //     // TODO: saner grammer? (PEG)
-    //     // TODO: understand more commands: help, reset, delete, change, rename
-    //     map(parseVoiceCommand).
-    //     share();
-    const voice$ = intents.listenVoice$.
-        // Capture speech until done or finish voice triggered
-        // Need .first() to only wait for a single signal
-        // flatMap(() => captureSpeech$().amb(intents.finishVoice$.map(Observable.never()).first())).share();
-        flatMap(() => captureSpeech$().takeUntil(intents.finishVoice$.map(Observable.never()))).share();
-    const voiceCapture$ = voice$.
-        flatMap(phrases$ => phrases$.last()).
-        // TODO: handle speech error?
-        // catch(() => '').
-        do(transcripts => console.log('Heard:', transcripts)).
-        // TODO: understand more commands: help, reset, delete, change, rename
-        map(transcripts => transcripts.map(parseVoiceCommand).filter(x => x)[0]).
-        do(res => console.log(res)).
-        share();
-    const voiceHeard$ = voice$
+
+    const phrases$$ = captureVoice$$(intents.listenVoice$, intents.finishVoice$).share();
+    const voiceHeard$ = phrases$$
           .flatMap(phrases$ => phrases$)
           .distinctUntilChanged() // TODO: array deep comparison
           .merge(intents.finishVoice$.map([]));
-    // FIXME: highlight command if matched
-    // FIXME: clear once command executed
-    // FIXME: show error if no command matched
-    // FIXME: catch/retry speech timeout
-    const voiceAdd$ = voiceCapture$.
-        // TODO: error if failed to understand (!= 0)
-        filter(result => !!result).
-        map(command => {
-            const {name, duration} = command;
-            switch (command.constructor) {
-            case CreateCommand:
-                const durationSeconds = toDuration(duration.minutes, duration.seconds);
-                const capitalizedName = capitalize(name);
-                return timers => timers.concat(timerModel(durationSeconds, {name: capitalizedName}));
-                break;
-            case StartCommand:
-                if (name) {
-                    return updateTimerByName(name, timer => timer.start());
-                } else {
-                    // TODO: apply to latest targeted
-                    return timers => timers.update(-1, timer => timer.start());
-                }
-                break;
-            case StopCommand:
-                if (name) {
-                    return updateTimerByName(name, timer => timer.pause());
-                } else {
-                    // TODO: apply to latest targeted
-                    return timers => timers.update(-1, timer => timer.pause());
-                }
-                break;
-            }
-        });
-    const voiceError$ = voiceCapture$.
-        // TODO: error if failed to understand (!= 0)
-        filter(result => ! (result && result.duration > 0));
-    const singleListening$ = Observable.merge(
-        intents.listenVoice$.map(true),
-        intents.finishVoice$.map(false)
-    ).startWith(false);
+    const voiceResults = processVoice(phrases$$, intents.finishVoice$);
+    const isListening$ = isBetween$(intents.listenVoice$, intents.finishVoice$);
+    const voiceUnderstood$ = voiceResults.commands$.map({});
+    const voiceFailed$ = voiceResults.errors$.map({});
+
     const init = timers => timers;
     const timers$ = Observable.
-          merge(update$, add$, reset$, remove$, edit$, editDone$, applyTime$, voiceAdd$).
+          merge(update$, add$, reset$, remove$, edit$, editDone$, applyTime$, voiceResults.commands$).
           startWith(init).
           scan(
               (timers, stepF) => stepF(timers),
-              // TODO: each ticker should each be a stream?
+              // FIXME: each timer should each be a stream?
               initialValue
           ).
           distinctUntilChanged(null, immutableIs).
@@ -167,8 +172,10 @@ const model = (intents, initialValue) => {
     return {
         timers$,
         hasTimerRunning$,
-        singleListening$,
+        isListening$,
         voiceHeard$,
+        voiceUnderstood$,
+        voiceFailed$,
     };
 };
 
@@ -187,7 +194,7 @@ const numberInput = (initialValue, attrs = {}) => {
     }).
           shareReplay(1);
 
-    // FIXME: special handling to never excede the field, overwrite
+    // TODO: special handling to never excede the field, overwrite
     // instead, then move to next field
     const keypress$ = inputElement$.flatMap(el => el.events.keypress$);
     const value$ = keypress$.
@@ -201,7 +208,7 @@ const numberInput = (initialValue, attrs = {}) => {
           startWith(initialValue).
           shareReplay(1);
 
-    // FIXME: on focus, move caret to very start (or even hidden?)
+    // TODO: on focus, move caret to very start (or even hidden?)
     const focus$ = inputElement$.flatMap(el => el.events.focus$);
 
     const tree$ = inputElement$.map(el => el.tree);
@@ -390,30 +397,50 @@ const mainComponent = (model) => {
     });
     const listenVoice$ = voiceButton.events.clicks$.map({});
 
-    const listeningStarted$ = model.singleListening$.filter(listen => listen);
+    const listeningFeedbackDuration = 2000;
+    const listeningFeedbackDone$ = Observable.merge(
+        model.voiceUnderstood$,
+        model.voiceFailed$
+    ).delay(listeningFeedbackDuration);
     const voiceHeard$ = model.voiceHeard$.
           map(phrases => phrases[0]).
           filter(x => x).
           startWith('').
           // TODO: fix filter above to let through empty phrase w/o breaking everything
-          merge(listeningStarted$.map(''));
-    const voiceHeardText$ = h$('div', {className: 'flex align-left'}, [voiceHeard$]);
-    const voiceActiveStopButton$ = voiceHeardText$.map(voiceHeard => button([
-        materialIcon('keyboard_voice', {className: 'stop-voice'}),
-        voiceHeard,
+          merge(listeningFeedbackDone$.map(''));
+    const voicePlaceholder = () => h('span', {className: 'voice-placeholder'}, '“4 minute timer for the eggs”');
+    const voiceHeardText$ = h$('div', {className: 'flex align-left'}, [
+        voiceHeard$.map(voiceHeard => {
+            return voiceHeard !== '' ? voiceHeard : voicePlaceholder();
+        })
+    ]);
+    const voiceIcon = materialIcon('keyboard_voice', {className: 'stop-voice'});
+    const voiceUnderstoodIcon = materialIcon('done', {className: 'stop-voice'});
+    const voiceFailedIcon = materialIcon('error_outline', {className: 'stop-voice'});
+    const mainIcon$ = Observable.merge(
+        listeningFeedbackDone$.map(voiceIcon),
+        model.voiceUnderstood$.map(voiceUnderstoodIcon),
+        model.voiceFailed$.map(voiceFailedIcon)
+    ).startWith(voiceIcon);
+    const listenVoiceButton = (mainIcon, text) => button([
+        mainIcon,
+        text,
         materialIcon('cancel'),
     ], {
         className: 'icon-button layout horizontal fill-width'
-    })).shareReplay(1);
+    });
+    const voiceActiveStopButton$ = Observable.combineLatest(
+        mainIcon$, voiceHeardText$,
+        (mainIcon, voiceHeardText) => listenVoiceButton(mainIcon, voiceHeardText)
+    ).shareReplay(1);
     // need to share-replay to ensure the same v-dom is passed down
 
-    // FIXME: show errors
     const finishVoice$ = voiceActiveStopButton$.
           flatMapLatest(b => b.events.clicks$).
           map({});
     const voiceStopTree$ = voiceActiveStopButton$.pluck('tree');
     const voiceTree$ = h$('div', {className: 'voice fill-width'}, [
-        model.singleListening$.
+        model.isListening$.
             flatMapLatest(listening => listening ? voiceStopTree$ : Observable.return(voiceButton.tree))
     ]);
 

@@ -142,3 +142,7 @@
     color: #F44336;
     /* TODO: flashing? */
 }
+
+.voice-placeholder {
+    color: #aaa;
+}
