@@ -6,7 +6,7 @@ import {List, is as immutableIs} from 'immutable';
 import NoSleep from 'nosleep.js';
 import leftPad from 'left-pad';
 
-import {sequenceCombine$, h$, renderTo$, proxyObservableMap} from './rx-util';
+import {h$, renderTo$, proxyObservableMap} from './rx-util';
 import {toDuration} from './util';
 import {parseVoiceCommand} from './parser';
 import {speechAvailable, captureSpeech$} from './speech';
@@ -258,7 +258,7 @@ const countdownEditorComponent = (model) => {
     };
 };
 
-const timerComponent = (timerModel, canRemove) => {
+const timerComponent = (timerModel) => {
     const minutes = timerModel.remainingMinutes;
     const seconds = timerModel.remainingSeconds;
     const minutesStr = leftPad(minutes, 2, 0);
@@ -270,7 +270,7 @@ const timerComponent = (timerModel, canRemove) => {
     const editDoneButton = materialIconButton('done', 'Done', {className: 'timer__edit-done'});
     const editCancelButton = materialIconButton('close', 'Cancel', {className: 'timer__edit-cancel'});
     const resetButton = materialIconButton('replay', 'Reset', {className: 'timer__reset', disabled: timerModel.pristine});
-    const removeButton = materialIconButton('delete', 'Remove', {className: 'timer__remove', disabled: ! canRemove});
+    const removeButton = materialIconButton('delete', 'Remove', {className: 'timer__remove'});
     const countdown = countdownComponent(timerModel).tree;
     const editableCountdown = button(countdown, {className: 'unstyled-button timer__edit'});
     const editor = countdownEditorComponent(timerModel);
@@ -348,6 +348,37 @@ const timerComponent = (timerModel, canRemove) => {
     };
 };
 
+const helpPaneComponent = () => {
+    const helpCommand = (text) => h('div', {className: 'help-pane-command'}, `“${text}”`);
+    return h('div', {className: 'help-pane'}, [
+        h('div', {className: 'help-pane-title'}, 'Speak to manage your timers:'),
+        helpCommand('5 minutes for the chickpeas'),
+        helpCommand('start the chickpeas'),
+        helpCommand('pause the chickpeas'),
+        helpCommand('help'),
+    ]);
+};
+
+const getStartedComponent = (isListening$) => {
+    const timersTree$ = isListening$.map(isListening => {
+        return isListening ?
+            helpPaneComponent() :
+            // TODO: toggle local state to warn if tapped this text
+            h('div', {className: 'get-started'}, [
+                'Tap the ',
+                materialIcon('keyboard_voice'),
+                ' above to start'
+            ]);
+    });
+    // TODO: shouldn't have to do this...
+    const timersUpdates$ = Observable.never();
+    const timersReset$ = Observable.never();
+    const timersEdit$ = Observable.never();
+    const timersEditDone$ = Observable.never();
+    const timersRemove$ = Observable.never();
+    return {timersTree$, timersUpdates$, timersReset$, timersEdit$, timersEditDone$, timersRemove$};
+};
+
 const mainComponent = (model) => {
     const vibrations$ = model.timers$.
         map((timers) => {
@@ -360,28 +391,31 @@ const mainComponent = (model) => {
 
     const timerList$ = model.timers$.
           map((timers) => {
-              const moreThanOneTimer = timers.size > 1;
-              const x = timers.map((timer, index) => {
-                  const comp = timerComponent(timer, moreThanOneTimer);
+              if (timers.isEmpty()) {
+                  return getStartedComponent(model.isListening$);
+              } else {
+                  const x = timers.map((timer, index) => {
+                      const comp = timerComponent(timer);
 
-                  const tree$ = comp.tree$;
-                  const updates$ = Observable.merge(
-                      comp.events.start$.map(() => ({index: index, type: 'start'})),
-                      comp.events.pause$.map(() => ({index: index, type: 'pause'}))
-                  );
-                  const reset$ = comp.events.reset$.map(() => ({index: index}));
-                  const edit$ = comp.events.edit$.map(() => ({index: index}));
-                  const editDone$ = comp.events.editDone$.map(({name, duration}) => ({index: index, duration, name}));
-                  const remove$ = comp.events.remove$.map(() => ({index: index}));
-                  return {tree$, updates$, reset$, edit$, editDone$, remove$};
-              }).toJS();
-              const timersTree$ = h$('div', {className: 'timers'}, x.map(({tree$}) => tree$));
-              const timersUpdates$ = Observable.merge(x.map(({updates$}) => updates$));
-              const timersReset$ = Observable.merge(x.map(({reset$}) => reset$));
-              const timersEdit$ = Observable.merge(x.map(({edit$}) => edit$));
-              const timersEditDone$ = Observable.merge(x.map(({editDone$}) => editDone$));
-              const timersRemove$ = Observable.merge(x.map(({remove$}) => remove$));
-              return {timersTree$, timersUpdates$, timersReset$, timersEdit$, timersEditDone$, timersRemove$};
+                      const tree$ = comp.tree$;
+                      const updates$ = Observable.merge(
+                          comp.events.start$.map(() => ({index: index, type: 'start'})),
+                          comp.events.pause$.map(() => ({index: index, type: 'pause'}))
+                      );
+                      const reset$ = comp.events.reset$.map(() => ({index: index}));
+                      const edit$ = comp.events.edit$.map(() => ({index: index}));
+                      const editDone$ = comp.events.editDone$.map(({name, duration}) => ({index: index, duration, name}));
+                      const remove$ = comp.events.remove$.map(() => ({index: index}));
+                      return {tree$, updates$, reset$, edit$, editDone$, remove$};
+                  }).toJS();
+                  const timersTree$ = h$('div', {className: 'timers'}, x.map(({tree$}) => tree$));
+                  const timersUpdates$ = Observable.merge(x.map(({updates$}) => updates$));
+                  const timersReset$ = Observable.merge(x.map(({reset$}) => reset$));
+                  const timersEdit$ = Observable.merge(x.map(({edit$}) => edit$));
+                  const timersEditDone$ = Observable.merge(x.map(({editDone$}) => editDone$));
+                  const timersRemove$ = Observable.merge(x.map(({remove$}) => remove$));
+                  return {timersTree$, timersUpdates$, timersReset$, timersEdit$, timersEditDone$, timersRemove$};
+              }
           }).
           shareReplay(1);
     const timerListTree$ = timerList$.flatMap(({timersTree$}) => timersTree$);
@@ -408,6 +442,7 @@ const mainComponent = (model) => {
           startWith('').
           // TODO: fix filter above to let through empty phrase w/o breaking everything
           merge(listeningFeedbackDone$.map(''));
+    // TODO: randomize help message
     const voicePlaceholder = () => h('span', {className: 'voice-placeholder'}, '“4 minute timer for the eggs”');
     const voiceHeardText$ = h$('div', {className: 'flex align-left'}, [
         voiceHeard$.map(voiceHeard => {
@@ -470,11 +505,9 @@ const mainComponent = (model) => {
 const intents = proxyObservableMap(() => theView.events$);
 
 const timerStore = TimerStore(LocalStorage('kitchen-timer'));
-const defaultTimers = List.of(timerModel(300, {name: 'Default'}));
 const storedTimers = timerStore.restore();
-const initialTimers = storedTimers.isEmpty() ? defaultTimers : storedTimers;
 
-const theModel = model(intents, initialTimers);
+const theModel = model(intents, storedTimers);
 const theView = mainComponent(theModel);
 
 const out = document.querySelector('main');

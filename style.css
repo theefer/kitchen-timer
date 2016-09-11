@@ -27,6 +27,10 @@
     text-align: left;
 }
 
+.material-icons {
+    vertical-align: middle;
+    font-size: calc(var(--icon-size) * 24px);
+}
 
 .unstyled-button,
 .icon-button {
@@ -41,9 +45,6 @@
 
 .icon-button {
     --icon-size: 1;
-}
-.icon-button .material-icons {
-    font-size: calc(var(--icon-size) * 24px);
 }
 
 .icon-button-labelled {
@@ -145,4 +146,25 @@
 
 .voice-placeholder {
     color: #aaa;
+}
+
+
+.get-started {
+    margin: 100px 0;
+    font-size: 200%;
+    --icon-size: 2;
+}
+
+.help-pane {
+    margin: 20px 0;
+    text-align: left;
+    width: 100%;
+}
+
+.help-pane-title {
+    font-weight: bold;
+}
+
+.help-pane-command {
+    margin: 10px 0;
 }
