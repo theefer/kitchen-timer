@@ -37,10 +37,13 @@ function isBetween$(start$, end$) {
 
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-const updateTimer = (timer, type) => {
+const updateTimer = (timer, type, update) => {
     switch(type) {
-    case 'start': return timer.start();
-    case 'pause': return timer.pause();
+    case 'start':     return timer.start();
+    case 'pause':     return timer.pause();
+    case 'edit':      return timer.edit();
+    case 'edit-done': return timer.editDone(update.duration, update.name);
+    case 'reset':     return timer.reset();
     default:
         throw new Exception(`unexpected update type: ${type}`);
     }
@@ -48,6 +51,7 @@ const updateTimer = (timer, type) => {
 
 const updateTimerByName = (name, func) => {
     // TODO: better matching / best matching, not all
+    // TODO: error if none matched?
     return timers => timers.map(timer => {
         if ((timer.name || '').toLowerCase().includes(name)) {
             return func(timer);
@@ -115,27 +119,11 @@ const model = (intents, initialValue) => {
     });
     const update$ = intents.timerUpdates$.map((update) => timers => {
         return timers.map((timer, index) => {
-            return index == update.index ? updateTimer(timer, update.type) : timer;
+            return index == update.index ? updateTimer(timer, update.type, update) : timer;
         });
     });
     const add$ = intents.addTimer$.map((update) => timers => {
         return timers.concat(timerModel(300));
-    });
-    const reset$ = intents.resetTimer$.map((update) => timers => {
-        return timers.map((timer, index) => {
-            return index == update.index ? timer.reset() : timer;
-        });
-    });
-    const edit$ = intents.editTimer$.map((update) => timers => {
-        return timers.map((timer, index) => {
-            return index == update.index ? timer.edit() : timer;
-        });
-    });
-    const editDone$ = intents.editDoneTimer$.map((update) => timers => {
-            console.log(update);
-        return timers.map((timer, index) => {
-            return index == update.index ? timer.editDone(update.duration, update.name) : timer;
-        });
     });
     const remove$ = intents.removeTimer$.map((update) => timers => {
         return timers.filter((timer, index) => index !== update.index);
@@ -147,13 +135,14 @@ const model = (intents, initialValue) => {
           .distinctUntilChanged() // TODO: array deep comparison
           .merge(intents.finishVoice$.map([]));
     const voiceResults = processVoice(phrases$$, intents.finishVoice$);
+    const commands$ = voiceResults.commands$.share();
     const isListening$ = isBetween$(intents.listenVoice$, intents.finishVoice$);
-    const voiceUnderstood$ = voiceResults.commands$.map({});
+    const voiceUnderstood$ = commands$.map({});
     const voiceFailed$ = voiceResults.errors$.map({});
 
     const init = timers => timers;
     const timers$ = Observable.
-          merge(update$, add$, reset$, remove$, edit$, editDone$, applyTime$, voiceResults.commands$).
+          merge(update$, add$, remove$, applyTime$, commands$).
           startWith(init).
           scan(
               (timers, stepF) => stepF(timers),
@@ -240,7 +229,7 @@ const countdownEditorComponent = (model) => {
         className: 'editor__input editor__seconds',
         pattern: '[0-6][0-9]'
     });
-    // TODO: onscreen number pad?
+    // TODO: onscreen number pad? modal editing (if touch screen)?
     // TODO: hours?
     const tree$ = h$('div', {className: 'editor'}, [
         minutesInput.tree$,
@@ -400,29 +389,23 @@ const mainComponent = (model) => {
                       const tree$ = comp.tree$;
                       const updates$ = Observable.merge(
                           comp.events.start$.map(() => ({index: index, type: 'start'})),
-                          comp.events.pause$.map(() => ({index: index, type: 'pause'}))
+                          comp.events.pause$.map(() => ({index: index, type: 'pause'})),
+                          comp.events.edit$.map( () => ({index: index, type: 'edit'})),
+                          comp.events.editDone$.map(({name, duration}) => ({index: index, type: 'edit-done', duration, name})),
+                          comp.events.reset$.map(() => ({index: index, type: 'reset'}))
                       );
-                      const reset$ = comp.events.reset$.map(() => ({index: index}));
-                      const edit$ = comp.events.edit$.map(() => ({index: index}));
-                      const editDone$ = comp.events.editDone$.map(({name, duration}) => ({index: index, duration, name}));
                       const remove$ = comp.events.remove$.map(() => ({index: index}));
-                      return {tree$, updates$, reset$, edit$, editDone$, remove$};
+                      return {tree$, updates$, remove$};
                   }).toJS();
                   const timersTree$ = h$('div', {className: 'timers'}, x.map(({tree$}) => tree$));
                   const timersUpdates$ = Observable.merge(x.map(({updates$}) => updates$));
-                  const timersReset$ = Observable.merge(x.map(({reset$}) => reset$));
-                  const timersEdit$ = Observable.merge(x.map(({edit$}) => edit$));
-                  const timersEditDone$ = Observable.merge(x.map(({editDone$}) => editDone$));
                   const timersRemove$ = Observable.merge(x.map(({remove$}) => remove$));
-                  return {timersTree$, timersUpdates$, timersReset$, timersEdit$, timersEditDone$, timersRemove$};
+                  return {timersTree$, timersUpdates$, timersRemove$};
               }
           }).
           shareReplay(1);
     const timerListTree$ = timerList$.flatMap(({timersTree$}) => timersTree$);
     const timerUpdates$ = timerList$.flatMap(({timersUpdates$}) => timersUpdates$);
-    const resetTimer$ = timerList$.flatMap(({timersReset$}) => timersReset$);
-    const editTimer$ = timerList$.flatMap(({timersEdit$}) => timersEdit$);
-    const editDoneTimer$ = timerList$.flatMap(({timersEditDone$}) => timersEditDone$);
     const removeTimer$ = timerList$.flatMap(({timersRemove$}) => timersRemove$);
     const newTimerButton = materialLabelledIconButton('add', 'New timer', {className: 'add-timer'});
     const addTimer$ = newTimerButton.events.clicks$;
@@ -491,9 +474,6 @@ const mainComponent = (model) => {
         events$: {
             timerUpdates$,
             addTimer$,
-            resetTimer$,
-            editTimer$,
-            editDoneTimer$,
             removeTimer$,
             listenVoice$,
             finishVoice$
