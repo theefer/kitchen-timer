@@ -93,7 +93,14 @@ function processVoice(phrases$$, finish$) {
                     return updateTimerByName(name, timer => timer.start());
                 } else {
                     // TODO: apply to latest targeted
-                    return timers => timers.update(-1, timer => timer.start());
+                    return timers => {
+                        if (timers.isEmpty()) {
+                            // TODO: surface error if no timer?
+                            return timers;
+                        } else {
+                            return timers.update(-1, timer => timer.start());
+                        }
+                    };
                 }
                 break;
             case StopCommand:
@@ -101,7 +108,14 @@ function processVoice(phrases$$, finish$) {
                     return updateTimerByName(name, timer => timer.pause());
                 } else {
                     // TODO: apply to latest targeted
-                    return timers => timers.update(-1, timer => timer.pause());
+                    return timers => {
+                        if (timers.isEmpty()) {
+                            // TODO: surface error if no timer?
+                            return timers;
+                        } else {
+                            return timers.update(-1, timer => timer.pause());
+                        }
+                    };
                 }
                 break;
             }
