@@ -1,6 +1,6 @@
 - Check for presence of voice API
 - Guess language, allow change
-- Persist to LocalStorage or other
 
 Smarter:
 - "New egg timer" => ask how you want them cooked
+- "New timer for steamed broccoli"
