@@ -1,8 +1,9 @@
-command        = startCommand / stopCommand / createCommand
+command        = startCommand / stopCommand / createCommand / helpCommand
 startCommand   = "start" (__ name:timerName)? { return {type: 'start', name: name || ''}; }
 stopCommand    = stopWords (__ name:timerName)? { return {type: 'stop', name: name}; }
 createCommand  = createWords duration:timerDef (__ "timer")? __ name:description { return {type: 'create', duration: duration, name: name}; }
                / createWords duration:timerDef (__ "timer")? { return {type: 'create', duration: duration, name: ''}; }
+helpCommand    = helpWords anything { return {type: 'help'}; }
 timerDef       = minutes:minutesDef __ (and __)? seconds:secondsDef { return minutes * 60 + seconds; }
                / minutes:minutesDef { return minutes * 60; }
                / seconds:secondsDef { return seconds; }
@@ -30,4 +31,6 @@ and            = "and"
 andHalf        = "and a half"
 createWords    = (("add" / "create") __)? ("new" __)?
 stopWords      = "stop" / "pause"
+helpWords      = "help" / "how do i" / "how can i"
 __             = " "+
+anything       = .*

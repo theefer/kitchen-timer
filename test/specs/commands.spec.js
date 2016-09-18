@@ -1,5 +1,5 @@
 import {parseVoiceCommand} from 'kitchen-timer/parser';
-import {StartCommand, StopCommand, Duration, CreateCommand} from 'kitchen-timer/model/commands';
+import {StartCommand, StopCommand, Duration, CreateCommand, HelpCommand} from 'kitchen-timer/model/commands';
 
 function duration(minutes = 0, seconds = 0) {
     return Duration({minutes, seconds});
@@ -70,6 +70,23 @@ describe('Commands', () => {
             'pause':         StopCommand(),
             'stop eggs':     StopCommand({name: 'eggs'}),
             'stop the eggs': StopCommand({name: 'eggs'}),
+        };
+
+        Object.keys(checks).forEach(input => {
+            const expected = checks[input];
+            it(`parses "${input}"`, () => {
+                const cmd = parseVoiceCommand(input);
+                expect(cmd).to.be.command(expected);
+            });
+        });
+    });
+
+    describe('Help', () => {
+        const checks = {
+            'help':                     HelpCommand(),
+            'help me':                  HelpCommand(),
+            'how do i use this thing?': HelpCommand(),
+            'how can I add a timer?':   HelpCommand(),
         };
 
         Object.keys(checks).forEach(input => {

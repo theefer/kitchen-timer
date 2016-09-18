@@ -16,7 +16,7 @@ import {beep} from './beep';
 import {button, input} from './components/base';
 import {materialIcon, materialIconButton, materialLabelledIconButton} from './components/material';
 
-import {StartCommand, StopCommand, CreateCommand} from './model/commands';
+import {StartCommand, StopCommand, CreateCommand, HelpCommand} from './model/commands';
 import {timerModel} from './model/timer';
 import {LocalStorage} from './storage/local';
 import {TimerStore} from './store/timer';
@@ -71,7 +71,7 @@ function processVoice(phrases$$, finish$) {
     const capture$ = phrases$$.
         flatMap(phrases$ => phrases$.last()).
         do(transcripts => console.log('Heard:', transcripts)).
-        // FIXME: understand more commands: help, reset, delete, change, rename, stop listening
+        // FIXME: understand more commands: reset, delete, change, rename, stop listening
         // FIXME: also return the transcript that parsed successfully
         map(transcripts => transcripts.map(parseVoiceCommand).filter(x => x)[0]).
         do(res => console.log(res && res.toJS())).
@@ -118,6 +118,11 @@ function processVoice(phrases$$, finish$) {
                     };
                 }
                 break;
+            case HelpCommand:
+                console.log('request help');
+                // FIXME: implement as flag in model - how to apply action from here?
+                // TODO: produce f(model) functions, lense to apply to timers vs other?
+                return timers => timers
             }
         });
     const errors$ = capture$.filter(result => !result);
