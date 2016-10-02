@@ -37,6 +37,8 @@
       "nosleep.js": "npm:nosleep.js@^0.5.1",
       "rx": "npm:rx@^4.1.0",
       "rxjs-es": "npm:rxjs-es@^5.0.0-beta.9",
+      "ts": "github:frankwallis/plugin-typescript@^5.1.2",
+      "typed-immutable": "npm:typed-immutable@^0.0.8",
       "vdom-virtualize": "npm:vdom-virtualize@^2.0.0"
     },
     "devDependencies": {
@@ -46,16 +48,21 @@
       "assert": "github:jspm/nodelibs-assert@^0.2.0-alpha",
       "buffer": "github:jspm/nodelibs-buffer@^0.2.0-alpha",
       "child_process": "github:jspm/nodelibs-child_process@^0.2.0-alpha",
+      "constants": "github:jspm/nodelibs-constants@^0.2.0-alpha",
+      "crypto": "github:jspm/nodelibs-crypto@^0.2.0-alpha",
       "events": "github:jspm/nodelibs-events@^0.2.0-alpha",
       "fs": "github:jspm/nodelibs-fs@^0.2.0-alpha",
       "http": "github:jspm/nodelibs-http@^0.2.0-alpha",
       "module": "github:jspm/nodelibs-module@^0.2.0-alpha",
+      "os": "github:jspm/nodelibs-os@^0.2.0-alpha",
       "path": "github:jspm/nodelibs-path@^0.2.0-alpha",
       "process": "github:jspm/nodelibs-process@^0.2.0-alpha",
       "stream": "github:jspm/nodelibs-stream@^0.2.0-alpha",
+      "string_decoder": "github:jspm/nodelibs-string_decoder@^0.2.0-alpha",
       "url": "github:jspm/nodelibs-url@^0.2.0-alpha",
       "util": "github:jspm/nodelibs-util@^0.2.0-alpha",
-      "virtual-dom": "npm:virtual-dom@^2.1.1"
+      "virtual-dom": "npm:virtual-dom@^2.1.1",
+      "vm": "github:jspm/nodelibs-vm@^0.2.0-alpha"
     },
     "overrides": {
       "npm:@reactivex/rxjs@5.0.0-beta.9": {
@@ -80,12 +87,28 @@
           "test.js"
         ]
       },
+      "npm:inherits@2.0.3": {
+        "ignore": [
+          "test.js"
+        ]
+      },
       "npm:ms@0.7.1": {
         "jspmNodeConversion": false,
         "format": "cjs"
       },
       "npm:rxjs-es@5.0.0-beta.9": {
         "format": "esm"
+      },
+      "npm:typescript@2.0.2": {
+        "browser": {},
+        "map": {
+          "buffer": "@empty",
+          "child_process": "@empty",
+          "fs": "@empty",
+          "path": "@empty",
+          "process": "@empty",
+          "readline": "@empty"
+        }
       }
     }
   }

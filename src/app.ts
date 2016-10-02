@@ -34,8 +34,8 @@ function between$(start$, end$, betweenValue, otherwiseValue) {
 function isBetween$(start$, end$) {
     return between$(start$, end$, true, false);
 }
-
-const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const x: number = 'x';
+const capitalize = (s: number) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const updateTimer = (timer, type, update) => {
     switch(type) {
@@ -84,10 +84,13 @@ function processVoice(phrases$$, finish$) {
             const {name, duration} = command;
             switch (command.constructor) {
             case CreateCommand:
+                // FIXME: timersIntents(timerIndex(N, timerUpdate(name, duration)))(model)
+                // FIXME: timersIntents(timerIndex(N, timerRemove()))(model)
+                // FIXME: appIntents(helpShow())(model)
                 const durationSeconds = toDuration(duration.minutes, duration.seconds);
                 const capitalizedName = capitalize(name);
                 return timers => timers.concat(timerModel(durationSeconds, {name: capitalizedName}));
-
+                break;
             case StartCommand:
                 if (name) {
                     return updateTimerByName(name, timer => timer.start());
@@ -102,7 +105,7 @@ function processVoice(phrases$$, finish$) {
                         }
                     };
                 }
-
+                break;
             case StopCommand:
                 if (name) {
                     return updateTimerByName(name, timer => timer.pause());
@@ -117,7 +120,7 @@ function processVoice(phrases$$, finish$) {
                         }
                     };
                 }
-
+                break;
             case HelpCommand:
                 console.log('request help');
                 // FIXME: implement as flag in model - how to apply action from here?
@@ -128,15 +131,6 @@ function processVoice(phrases$$, finish$) {
     const errors$ = capture$.filter(result => !result);
     return {commands$, errors$};
 }
-
-import {Record as TRecord, List as TList, Maybe as TMaybe} from "typed-immutable";
-
-const TimerModel = TRecord({duration: Number, name: TMaybe(String)});
-const VoiceModel = TRecord({isListening: Boolean});
-// voiceHeard$,
-// voiceUnderstood$,
-// voiceFailed$,
-const AppModel = TRecord({timers: TList(TimerModel), voice: VoiceModel});
 
 const model = (intents, initialValue) => {
     const ticker$ = Observable.interval(1000);
