@@ -87,7 +87,7 @@ function processVoice(phrases$$, finish$) {
                 const durationSeconds = toDuration(duration.minutes, duration.seconds);
                 const capitalizedName = capitalize(name);
                 return timers => timers.concat(timerModel(durationSeconds, {name: capitalizedName}));
-                break;
+
             case StartCommand:
                 if (name) {
                     return updateTimerByName(name, timer => timer.start());
@@ -102,7 +102,7 @@ function processVoice(phrases$$, finish$) {
                         }
                     };
                 }
-                break;
+
             case StopCommand:
                 if (name) {
                     return updateTimerByName(name, timer => timer.pause());
@@ -117,7 +117,7 @@ function processVoice(phrases$$, finish$) {
                         }
                     };
                 }
-                break;
+
             case HelpCommand:
                 console.log('request help');
                 // FIXME: implement as flag in model - how to apply action from here?
