@@ -84,6 +84,9 @@ function processVoice(phrases$$, finish$) {
             const {name, duration} = command;
             switch (command.constructor) {
             case CreateCommand:
+                // FIXME: timersIntents(timerIndex(N, timerUpdate(name, duration)))(model)
+                // FIXME: timersIntents(timerIndex(N, timerRemove()))(model)
+                // FIXME: appIntents(helpShow())(model)
                 const durationSeconds = toDuration(duration.minutes, duration.seconds);
                 const capitalizedName = capitalize(name);
                 return timers => timers.concat(timerModel(durationSeconds, {name: capitalizedName}));
