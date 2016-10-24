@@ -1,0 +1,9 @@
+- Chrome for Android marks each intermediate SpeechRecogResult as
+  isFinal (bug)
+- Chrome for Android doesn't respect SpeechRecog continuous flag, ends
+  after each utterance
+
+- No way to prevent sleep (play video hack)
+
+- No way to play sound or trigger a notification or some other code
+  when backgrounded
