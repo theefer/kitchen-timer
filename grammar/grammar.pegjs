@@ -29,7 +29,7 @@ digitWord      = "one"   { return 1; }
                / "nine"  { return 9; }
 and            = "and"
 andHalf        = "and a half"
-createWords    = (("add" / "create") __)? ("new" __)?
+createWords    = (("add" / "create") __)? (("a" / "one") __)? ("new" __)?
 stopWords      = "stop" / "pause"
 helpWords      = "help" / "how do i" / "how can i"
 __             = " "+
